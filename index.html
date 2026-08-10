@@ -122,17 +122,6 @@
   .stat .delta { font-size: 12px; margin-top: 2px; }
   .delta.pos { color: var(--good); }
   .delta.neg { color: #b91c1c; }
-  .progress-bar-track {
-    height: 8px;
-    background: #eef1f5;
-    border-radius: 4px;
-    overflow: hidden;
-    margin-top: 8px;
-  }
-  .progress-bar-fill {
-    height: 100%;
-    background: var(--accent);
-  }
   .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
   .legend span { display: inline-flex; align-items: center; gap: 5px; }
   .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
@@ -151,6 +140,16 @@
   .btn-metric { background: var(--metric-color); }
   .metric-card .stat { background: color-mix(in srgb, var(--metric-color) 6%, white); border-color: color-mix(in srgb, var(--metric-color) 22%, var(--border)); }
   .metric-card .stat .value { color: var(--metric-color); }
+  .goal-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  .goal-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 2px; }
+  .goal-value { font-size: 28px; font-weight: 800; color: var(--metric-color); }
+  .goal-edit { margin-top: 14px; }
+  .timeline-percent-value { color: var(--accent); }
+  .timeline-ticks { display: flex; align-items: stretch; gap: 2px; height: 36px; }
+  .timeline-tick { flex: 1; min-width: 2px; background: #eef1f5; border-radius: 2px; }
+  .timeline-tick.filled { background: var(--accent); }
+  .timeline-tick.today { background: var(--accent-light); }
+  .timeline-dates { text-align: center; margin-top: 10px; }
   .cell-value { cursor: pointer; border-bottom: 1px dotted var(--muted); }
   .cell-value:hover { color: var(--accent); }
   .clear-x { background: none; border: none; color: #b91c1c; font-size: 11px; padding: 0 0 0 6px; cursor: pointer; font-weight: 700; }
@@ -177,22 +176,64 @@
 </head>
 <body>
 <div class="container">
-  <h1>Health Tracker</h1>
-  <div class="subtitle">Daily weight, blood pressure, and water tracking with goal progress.</div>
+  <h1>David's Health Tracker</h1>
+
+  <!-- TIMELINE -->
+  <div class="card" id="timelineCard">
+    <div class="card-row"><h2 style="margin:0;">Goal Timeline</h2></div>
+
+    <div class="goal-row" id="timelineGoalRow">
+      <div>
+        <div class="goal-label">Time Elapsed</div>
+        <div class="goal-value timeline-percent-value" id="timelinePercentValue">Not set</div>
+      </div>
+      <button class="secondary small" id="editTimelineBtn">Edit Dates</button>
+    </div>
+    <div class="goal-edit" id="timelineGoalEdit" style="display:none;">
+      <div class="grid">
+        <div class="field">
+          <label for="goalStartDate">Start date</label>
+          <input type="date" id="goalStartDate">
+        </div>
+        <div class="field">
+          <label for="goalTargetDate">Goal date</label>
+          <input type="date" id="goalTargetDate">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button id="saveTimeline">Save Dates</button>
+        <button class="secondary small" id="cancelTimelineBtn">Cancel</button>
+      </div>
+    </div>
+
+    <div id="timelineStat" style="margin-top:18px;"></div>
+  </div>
 
   <!-- WATER -->
   <div class="card metric-card metric-water" id="waterCard">
     <div class="card-row"><h2 style="margin:0;">Water</h2></div>
 
-    <div class="grid">
-      <div class="field">
-        <label for="goalWater">Goal water (oz/day)</label>
-        <input type="number" step="1" id="goalWater" placeholder="e.g. 80">
+    <div class="goal-row" id="waterGoalRow">
+      <div>
+        <div class="goal-label">Goal Water</div>
+        <div class="goal-value" id="waterGoalValue">Not set</div>
+      </div>
+      <button class="secondary small" id="editGoalWaterBtn">Edit Goal</button>
+    </div>
+    <div class="goal-edit" id="waterGoalEdit" style="display:none;">
+      <div class="grid">
+        <div class="field">
+          <label for="goalWater">Goal water (oz/day)</label>
+          <input type="number" step="1" id="goalWater" placeholder="e.g. 80">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-metric small" id="saveGoalWater">Save Goal</button>
+        <button class="secondary small" id="cancelGoalWaterBtn">Cancel</button>
       </div>
     </div>
-    <div class="btn-row">
-      <button class="btn-metric small" id="saveGoalWater">Save Goal</button>
-    </div>
+
+    <div class="stat-grid" id="waterStat" style="margin-top:18px;"></div>
 
     <div class="grid" style="margin-top:18px;">
       <div class="field">
@@ -209,8 +250,6 @@
     </div>
     <div class="hint">Each entry adds to that day's running total — log it every time you drink some.</div>
 
-    <div class="stat-grid" id="waterStat" style="margin-top:18px;"></div>
-
     <div class="legend" style="margin-top:18px;">
       <span><span class="swatch" style="background:var(--water-color)"></span>Water (oz)</span>
       <span><span class="swatch dash"></span>Goal</span>
@@ -222,15 +261,27 @@
   <div class="card metric-card metric-weight" id="weightCard">
     <div class="card-row"><h2 style="margin:0;">Weight</h2></div>
 
-    <div class="grid">
-      <div class="field">
-        <label for="goalWeight">Goal weight (lbs)</label>
-        <input type="number" step="0.1" id="goalWeight" placeholder="e.g. 180">
+    <div class="goal-row" id="weightGoalRow">
+      <div>
+        <div class="goal-label">Goal Weight</div>
+        <div class="goal-value" id="weightGoalValue">Not set</div>
+      </div>
+      <button class="secondary small" id="editGoalWeightBtn">Edit Goal</button>
+    </div>
+    <div class="goal-edit" id="weightGoalEdit" style="display:none;">
+      <div class="grid">
+        <div class="field">
+          <label for="goalWeight">Goal weight (lbs)</label>
+          <input type="number" step="0.1" id="goalWeight" placeholder="e.g. 180">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-metric small" id="saveGoalWeight">Save Goal</button>
+        <button class="secondary small" id="cancelGoalWeightBtn">Cancel</button>
       </div>
     </div>
-    <div class="btn-row">
-      <button class="btn-metric small" id="saveGoalWeight">Save Goal</button>
-    </div>
+
+    <div class="stat-grid" id="weightStat" style="margin-top:18px;"></div>
 
     <div class="grid" style="margin-top:18px;">
       <div class="field">
@@ -246,8 +297,6 @@
       <button class="btn-metric" id="saveWeightEntry">Log Weight</button>
     </div>
 
-    <div class="stat-grid" id="weightStat" style="margin-top:18px;"></div>
-
     <div class="legend" style="margin-top:18px;">
       <span><span class="swatch" style="background:var(--weight-color)"></span>Weight</span>
       <span><span class="swatch dash"></span>Goal</span>
@@ -259,19 +308,31 @@
   <div class="card metric-card metric-bp" id="bpCard">
     <div class="card-row"><h2 style="margin:0;">Blood Pressure</h2></div>
 
-    <div class="grid">
-      <div class="field">
-        <label for="goalSystolic" class="label-sys">Goal systolic</label>
-        <input type="number" step="1" id="goalSystolic" class="input-sys" placeholder="e.g. 120">
+    <div class="goal-row" id="bpGoalRow">
+      <div>
+        <div class="goal-label">Goal Blood Pressure</div>
+        <div class="goal-value" id="bpGoalValue">Not set</div>
       </div>
-      <div class="field">
-        <label for="goalDiastolic" class="label-dia">Goal diastolic</label>
-        <input type="number" step="1" id="goalDiastolic" class="input-dia" placeholder="e.g. 80">
+      <button class="secondary small" id="editGoalBpBtn">Edit Goal</button>
+    </div>
+    <div class="goal-edit" id="bpGoalEdit" style="display:none;">
+      <div class="grid">
+        <div class="field">
+          <label for="goalSystolic" class="label-sys">Goal systolic</label>
+          <input type="number" step="1" id="goalSystolic" class="input-sys" placeholder="e.g. 120">
+        </div>
+        <div class="field">
+          <label for="goalDiastolic" class="label-dia">Goal diastolic</label>
+          <input type="number" step="1" id="goalDiastolic" class="input-dia" placeholder="e.g. 80">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-metric small" id="saveGoalBp">Save Goal</button>
+        <button class="secondary small" id="cancelGoalBpBtn">Cancel</button>
       </div>
     </div>
-    <div class="btn-row">
-      <button class="btn-metric small" id="saveGoalBp">Save Goal</button>
-    </div>
+
+    <div class="stat-grid" id="bpStat" style="margin-top:18px;"></div>
 
     <div class="grid" style="margin-top:18px;">
       <div class="field">
@@ -290,8 +351,6 @@
     <div class="btn-row">
       <button class="btn-metric" id="saveBpEntry">Log Blood Pressure</button>
     </div>
-
-    <div class="stat-grid" id="bpStat" style="margin-top:18px;"></div>
 
     <div class="legend" style="margin-top:18px;">
       <span><span class="swatch" style="background:var(--sys-color)"></span>Systolic</span>
@@ -314,25 +373,6 @@
       </div>
     </div>
     <div id="tableWrap"></div>
-  </div>
-
-  <!-- TIMELINE -->
-  <div class="card">
-    <div class="card-row"><h2 style="margin:0;">Goal Timeline</h2></div>
-    <div class="grid">
-      <div class="field">
-        <label for="goalStartDate">Start date</label>
-        <input type="date" id="goalStartDate">
-      </div>
-      <div class="field">
-        <label for="goalTargetDate">Goal date</label>
-        <input type="date" id="goalTargetDate">
-      </div>
-    </div>
-    <div class="btn-row">
-      <button id="saveTimeline">Save Timeline</button>
-    </div>
-    <div id="timelineStat"></div>
   </div>
 
   <!-- SYNC -->
@@ -442,23 +482,70 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     renderAll();
   }
 
+  function renderGoalDisplays() {
+    document.getElementById('weightGoalValue').textContent = (goals.weight !== null && goals.weight !== undefined) ? goals.weight + ' lbs' : 'Not set';
+    document.getElementById('bpGoalValue').innerHTML = bpValueHtml(goals.systolic ?? null, goals.diastolic ?? null);
+    document.getElementById('waterGoalValue').textContent = (goals.water !== null && goals.water !== undefined) ? goals.water + ' oz/day' : 'Not set';
+  }
+
   document.getElementById('saveTimeline').addEventListener('click', function () {
     updateGoals({
       startDate: document.getElementById('goalStartDate').value || null,
       targetDate: document.getElementById('goalTargetDate').value || null,
     });
+    hideGoalEdit('timeline');
   });
+
+  // Each metric's goal (and the timeline dates) is shown as large bold text;
+  // "Edit" swaps in the input form.
+  function showGoalEdit(prefix) {
+    document.getElementById(prefix + 'GoalRow').style.display = 'none';
+    document.getElementById(prefix + 'GoalEdit').style.display = 'block';
+  }
+  function hideGoalEdit(prefix) {
+    document.getElementById(prefix + 'GoalEdit').style.display = 'none';
+    document.getElementById(prefix + 'GoalRow').style.display = 'flex';
+  }
+
+  document.getElementById('editTimelineBtn').addEventListener('click', function () { showGoalEdit('timeline'); });
+  document.getElementById('cancelTimelineBtn').addEventListener('click', function () {
+    document.getElementById('goalStartDate').value = goals.startDate || '';
+    document.getElementById('goalTargetDate').value = goals.targetDate || '';
+    hideGoalEdit('timeline');
+  });
+
+  document.getElementById('editGoalWeightBtn').addEventListener('click', function () { showGoalEdit('weight'); });
+  document.getElementById('editGoalBpBtn').addEventListener('click', function () { showGoalEdit('bp'); });
+  document.getElementById('editGoalWaterBtn').addEventListener('click', function () { showGoalEdit('water'); });
+
+  document.getElementById('cancelGoalWeightBtn').addEventListener('click', function () {
+    document.getElementById('goalWeight').value = goals.weight ?? '';
+    hideGoalEdit('weight');
+  });
+  document.getElementById('cancelGoalBpBtn').addEventListener('click', function () {
+    document.getElementById('goalSystolic').value = goals.systolic ?? '';
+    document.getElementById('goalDiastolic').value = goals.diastolic ?? '';
+    hideGoalEdit('bp');
+  });
+  document.getElementById('cancelGoalWaterBtn').addEventListener('click', function () {
+    document.getElementById('goalWater').value = goals.water ?? '';
+    hideGoalEdit('water');
+  });
+
   document.getElementById('saveGoalWeight').addEventListener('click', function () {
     updateGoals({ weight: parseFloatOrNull(document.getElementById('goalWeight').value) });
+    hideGoalEdit('weight');
   });
   document.getElementById('saveGoalBp').addEventListener('click', function () {
     updateGoals({
       systolic: parseFloatOrNull(document.getElementById('goalSystolic').value),
       diastolic: parseFloatOrNull(document.getElementById('goalDiastolic').value),
     });
+    hideGoalEdit('bp');
   });
   document.getElementById('saveGoalWater').addEventListener('click', function () {
     updateGoals({ water: parseFloatOrNull(document.getElementById('goalWater').value) });
+    hideGoalEdit('water');
   });
 
   function parseFloatOrNull(v) {
@@ -616,7 +703,9 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
 
   function renderTimeline() {
     const el = document.getElementById('timelineStat');
+    const percentEl = document.getElementById('timelinePercentValue');
     if (!goals.startDate || !goals.targetDate) {
+      percentEl.textContent = 'Not set';
       el.innerHTML = '<div class="hint">Set a start date and goal date to see your timeline progress.</div>';
       return;
     }
@@ -627,9 +716,25 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     const pct = total > 0 ? Math.round((elapsed / total) * 100) : 0;
     const remaining = Math.max(0, daysBetween(today, goals.targetDate));
     const status = remaining === 0 ? 'Goal date reached' : `${remaining} day${remaining === 1 ? '' : 's'} remaining`;
+
+    percentEl.textContent = pct + '%';
+
+    // One tick per day, capped so extremely long timelines don't render thousands of nodes.
+    const totalForTicks = Math.max(total, 1);
+    const maxTicks = 120;
+    const tickCount = Math.min(totalForTicks, maxTicks);
+    let ticksHtml = '';
+    for (let i = 0; i < tickCount; i++) {
+      const dayIndex = Math.floor((i / tickCount) * totalForTicks);
+      let cls = 'timeline-tick';
+      if (dayIndex < elapsed) cls += ' filled';
+      else if (dayIndex === elapsed) cls += ' today';
+      ticksHtml += `<div class="${cls}"></div>`;
+    }
+
     el.innerHTML = `
-      <div class="hint" style="margin-top:14px;">${fmtDate(goals.startDate)} → ${fmtDate(goals.targetDate)} · ${status} · ${pct}% of time elapsed</div>
-      <div class="progress-bar-track"><div class="progress-bar-fill" style="width:${pct}%;"></div></div>
+      <div class="timeline-ticks">${ticksHtml}</div>
+      <div class="timeline-dates hint">${fmtDate(goals.startDate)} → ${fmtDate(goals.targetDate)} · ${status}</div>
     `;
   }
 
@@ -1020,6 +1125,7 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
   // ---------- Render all ----------
   function renderAll() {
     renderTimeline();
+    renderGoalDisplays();
     renderStats();
     renderTable();
     renderCharts();
