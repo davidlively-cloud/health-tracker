@@ -40,7 +40,7 @@
     padding: 18px 20px;
     margin-bottom: 18px;
   }
-  .card-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  .card-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -54,15 +54,16 @@
   }
   input, select {
     width: 100%;
+    min-width: 0;
     padding: 8px 10px;
     border: 1px solid var(--border);
     border-radius: 6px;
-    font-size: 14px;
+    font-size: 16px;
     background: #fff;
     color: var(--text);
   }
   input:focus, select:focus { outline: 2px solid var(--accent-light); border-color: var(--accent); }
-  .field { margin-bottom: 0; }
+  .field { margin-bottom: 0; min-width: 0; }
   button {
     cursor: pointer;
     border: none;
@@ -89,8 +90,10 @@
     font-size: 12px;
   }
   .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  #tableWrap { overflow-x: auto; }
   table {
     width: 100%;
+    min-width: 480px;
     border-collapse: collapse;
     font-size: 13px;
   }
@@ -112,6 +115,7 @@
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 12px 14px;
+    min-width: 0;
   }
   .stat .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 4px; }
   .stat .value { font-size: 20px; font-weight: 700; }
@@ -163,6 +167,12 @@
   .input-dia { border-color: var(--dia-color); }
   .bp-value-sys { color: var(--sys-color); }
   .bp-value-dia { color: var(--dia-color); }
+  @media (max-width: 480px) {
+    body { padding: 12px; }
+    .card { padding: 14px 16px; }
+    .grid { grid-template-columns: 1fr; }
+    h1 { font-size: 19px; }
+  }
 </style>
 </head>
 <body>
@@ -170,60 +180,42 @@
   <h1>Health Tracker</h1>
   <div class="subtitle">Daily weight, blood pressure, and water tracking with goal progress.</div>
 
-  <!-- SYNC -->
-  <div class="card" id="syncCard">
-    <div class="card-row"><h2 style="margin:0;">Cross-Device Sync</h2></div>
-    <div id="syncStatus" class="hint">Loading sync…</div>
+  <!-- WATER -->
+  <div class="card metric-card metric-water" id="waterCard">
+    <div class="card-row"><h2 style="margin:0;">Water</h2></div>
 
-    <div id="syncSetup" style="display:none;">
-      <div class="btn-row" style="margin-top:0;">
-        <button class="small" id="createSyncCodeBtn">Create New Sync Code</button>
-        <button class="secondary small" id="showEnterCodeBtn">I Have a Sync Code</button>
-      </div>
-      <div id="enterCodeRow" style="display:none; margin-top:14px;">
-        <div class="grid">
-          <div class="field">
-            <label for="syncCodeInput">Sync code</label>
-            <input type="text" id="syncCodeInput" placeholder="Paste the code from your other device">
-          </div>
-        </div>
-        <div class="btn-row">
-          <button class="small" id="useSyncCodeBtn">Connect</button>
-        </div>
-      </div>
-    </div>
-
-    <div id="syncConnected" style="display:none;">
-      <div class="grid" style="margin-top:0;">
-        <div class="field">
-          <label for="syncCodeDisplay">Your sync code — enter this on your other devices</label>
-          <input type="text" id="syncCodeDisplay" readonly>
-        </div>
-      </div>
-      <div class="btn-row">
-        <button class="secondary small" id="copySyncCodeBtn">Copy Code</button>
-        <button class="secondary small" id="disconnectSyncBtn">Disconnect</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- TIMELINE -->
-  <div class="card">
-    <div class="card-row"><h2 style="margin:0;">Goal Timeline</h2></div>
     <div class="grid">
       <div class="field">
-        <label for="goalStartDate">Start date</label>
-        <input type="date" id="goalStartDate">
-      </div>
-      <div class="field">
-        <label for="goalTargetDate">Goal date</label>
-        <input type="date" id="goalTargetDate">
+        <label for="goalWater">Goal water (oz/day)</label>
+        <input type="number" step="1" id="goalWater" placeholder="e.g. 80">
       </div>
     </div>
     <div class="btn-row">
-      <button id="saveTimeline">Save Timeline</button>
+      <button class="btn-metric small" id="saveGoalWater">Save Goal</button>
     </div>
-    <div id="timelineStat"></div>
+
+    <div class="grid" style="margin-top:18px;">
+      <div class="field">
+        <label for="waterDate">Date</label>
+        <input type="date" id="waterDate">
+      </div>
+      <div class="field">
+        <label for="waterValue">Add water (oz)</label>
+        <input type="number" step="1" id="waterValue" placeholder="e.g. 8">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn-metric" id="saveWaterEntry">Add Water</button>
+    </div>
+    <div class="hint">Each entry adds to that day's running total — log it every time you drink some.</div>
+
+    <div class="stat-grid" id="waterStat" style="margin-top:18px;"></div>
+
+    <div class="legend" style="margin-top:18px;">
+      <span><span class="swatch" style="background:var(--water-color)"></span>Water (oz)</span>
+      <span><span class="swatch dash"></span>Goal</span>
+    </div>
+    <div class="chart-wrap" id="waterChart"></div>
   </div>
 
   <!-- WEIGHT -->
@@ -309,44 +301,6 @@
     <div class="chart-wrap" id="bpChart"></div>
   </div>
 
-  <!-- WATER -->
-  <div class="card metric-card metric-water" id="waterCard">
-    <div class="card-row"><h2 style="margin:0;">Water</h2></div>
-
-    <div class="grid">
-      <div class="field">
-        <label for="goalWater">Goal water (oz/day)</label>
-        <input type="number" step="1" id="goalWater" placeholder="e.g. 80">
-      </div>
-    </div>
-    <div class="btn-row">
-      <button class="btn-metric small" id="saveGoalWater">Save Goal</button>
-    </div>
-
-    <div class="grid" style="margin-top:18px;">
-      <div class="field">
-        <label for="waterDate">Date</label>
-        <input type="date" id="waterDate">
-      </div>
-      <div class="field">
-        <label for="waterValue">Add water (oz)</label>
-        <input type="number" step="1" id="waterValue" placeholder="e.g. 8">
-      </div>
-    </div>
-    <div class="btn-row">
-      <button class="btn-metric" id="saveWaterEntry">Add Water</button>
-    </div>
-    <div class="hint">Each entry adds to that day's running total — log it every time you drink some.</div>
-
-    <div class="stat-grid" id="waterStat" style="margin-top:18px;"></div>
-
-    <div class="legend" style="margin-top:18px;">
-      <span><span class="swatch" style="background:var(--water-color)"></span>Water (oz)</span>
-      <span><span class="swatch dash"></span>Goal</span>
-    </div>
-    <div class="chart-wrap" id="waterChart"></div>
-  </div>
-
   <!-- TABLE -->
   <div class="card">
     <div class="card-row">
@@ -360,6 +314,62 @@
       </div>
     </div>
     <div id="tableWrap"></div>
+  </div>
+
+  <!-- TIMELINE -->
+  <div class="card">
+    <div class="card-row"><h2 style="margin:0;">Goal Timeline</h2></div>
+    <div class="grid">
+      <div class="field">
+        <label for="goalStartDate">Start date</label>
+        <input type="date" id="goalStartDate">
+      </div>
+      <div class="field">
+        <label for="goalTargetDate">Goal date</label>
+        <input type="date" id="goalTargetDate">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button id="saveTimeline">Save Timeline</button>
+    </div>
+    <div id="timelineStat"></div>
+  </div>
+
+  <!-- SYNC -->
+  <div class="card" id="syncCard">
+    <div class="card-row"><h2 style="margin:0;">Cross-Device Sync</h2></div>
+    <div id="syncStatus" class="hint">Loading sync…</div>
+
+    <div id="syncSetup" style="display:none;">
+      <div class="btn-row" style="margin-top:0;">
+        <button class="small" id="createSyncCodeBtn">Create New Sync Code</button>
+        <button class="secondary small" id="showEnterCodeBtn">I Have a Sync Code</button>
+      </div>
+      <div id="enterCodeRow" style="display:none; margin-top:14px;">
+        <div class="grid">
+          <div class="field">
+            <label for="syncCodeInput">Sync code</label>
+            <input type="text" id="syncCodeInput" placeholder="Paste the code from your other device">
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="small" id="useSyncCodeBtn">Connect</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="syncConnected" style="display:none;">
+      <div class="grid" style="margin-top:0;">
+        <div class="field">
+          <label for="syncCodeDisplay">Your sync code — enter this on your other devices</label>
+          <input type="text" id="syncCodeDisplay" readonly>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="secondary small" id="copySyncCodeBtn">Copy Code</button>
+        <button class="secondary small" id="disconnectSyncBtn">Disconnect</button>
+      </div>
+    </div>
   </div>
 
   <footer>Data is always saved locally in this browser. Connect a sync code above to keep it in sync live across all your devices, or use Export/Import to move it manually.</footer>
@@ -695,7 +705,7 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
   // ---------- Charts (hand-rolled SVG) ----------
   function drawLineChart(containerId, series, opts) {
     const container = document.getElementById(containerId);
-    const width = Math.max(600, container.clientWidth || 600);
+    const width = Math.max(280, container.clientWidth || 600);
     const height = 220;
     const padL = 44, padR = 16, padT = 16, padB = 30;
     const plotW = width - padL - padR;
@@ -770,7 +780,7 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
 
   function drawBarChart(containerId, points, color, goalValue) {
     const container = document.getElementById(containerId);
-    const width = Math.max(600, container.clientWidth || 600);
+    const width = Math.max(280, container.clientWidth || 600);
     const height = 220;
     const padL = 44, padR = 16, padT = 16, padB = 30;
     const plotW = width - padL - padR;
