@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Health Tracker</title>
+<style>
+  :root {
+    --bg: #f4f6f8;
+    --card: #ffffff;
+    --border: #e2e6ea;
+    --text: #1f2933;
+    --muted: #6b7684;
+    --accent: #2563eb;
+    --accent-light: #dbeafe;
+    --weight-color: #166534;
+    --sys-color: #dc2626;
+    --dia-color: #1d4ed8;
+    --water-color: #0891b2;
+    --goal-color: #9ca3af;
+    --good: #16a34a;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 0 0 14px; }
+  .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  .container { max-width: 980px; margin: 0 auto; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    margin-bottom: 18px;
+  }
+  .card-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+  }
+  label {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  input, select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 14px;
+    background: #fff;
+    color: var(--text);
+  }
+  input:focus, select:focus { outline: 2px solid var(--accent-light); border-color: var(--accent); }
+  .field { margin-bottom: 0; }
+  button {
+    cursor: pointer;
+    border: none;
+    border-radius: 6px;
+    padding: 9px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    background: var(--accent);
+    color: white;
+  }
+  button:hover { opacity: 0.9; }
+  button.secondary {
+    background: #eef1f5;
+    color: var(--text);
+  }
+  button.danger {
+    background: #fee2e2;
+    color: #b91c1c;
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+  button.small {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  tr:hover td { background: #fafbfc; }
+  .empty-state { color: var(--muted); font-size: 13px; padding: 20px 0; text-align: center; }
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 14px;
+  }
+  .stat {
+    background: #fafbfc;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .stat .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 4px; }
+  .stat .value { font-size: 20px; font-weight: 700; }
+  .stat .delta { font-size: 12px; margin-top: 2px; }
+  .delta.pos { color: var(--good); }
+  .delta.neg { color: #b91c1c; }
+  .progress-bar-track {
+    height: 8px;
+    background: #eef1f5;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: var(--accent);
+  }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .swatch.dash { border-bottom: 2px dashed var(--goal-color); width: 12px; height: 0; }
+  .chart-wrap { overflow-x: auto; }
+  svg { display: block; }
+  .actions-cell { white-space: nowrap; }
+  .no-data { text-align: center; color: var(--muted); padding: 40px 0; font-size: 13px; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 10px; }
+  footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 30px; }
+  .metric-card { border-left: 5px solid var(--metric-color, var(--accent)); }
+  .metric-weight { --metric-color: var(--weight-color); }
+  .metric-bp { --metric-color: var(--sys-color); }
+  .metric-water { --metric-color: var(--water-color); }
+  .metric-card h2 { color: var(--metric-color); }
+  .btn-metric { background: var(--metric-color); }
+  .metric-card .stat { background: color-mix(in srgb, var(--metric-color) 6%, white); border-color: color-mix(in srgb, var(--metric-color) 22%, var(--border)); }
+  .metric-card .stat .value { color: var(--metric-color); }
+  .cell-value { cursor: pointer; border-bottom: 1px dotted var(--muted); }
+  .cell-value:hover { color: var(--accent); }
+  .clear-x { background: none; border: none; color: #b91c1c; font-size: 11px; padding: 0 0 0 6px; cursor: pointer; font-weight: 700; }
+  /* Blood pressure section: systolic red, diastolic blue, shown as a two-tone border and per-field coloring */
+  .metric-bp {
+    border-image: linear-gradient(180deg, var(--sys-color), var(--dia-color)) 1;
+    border-image-slice: 1;
+    border-image-width: 0 0 0 5px;
+  }
+  .metric-bp h2 { color: var(--text); }
+  .label-sys { color: var(--sys-color); }
+  .label-dia { color: var(--dia-color); }
+  .input-sys { border-color: var(--sys-color); }
+  .input-dia { border-color: var(--dia-color); }
+  .bp-value-sys { color: var(--sys-color); }
+  .bp-value-dia { color: var(--dia-color); }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Health Tracker</h1>
+  <div class="subtitle">Daily weight, blood pressure, and water tracking with goal progress.</div>
+
+  <!-- SYNC -->
+  <div class="card" id="syncCard">
+    <div class="card-row"><h2 style="margin:0;">Cross-Device Sync</h2></div>
+    <div id="syncStatus" class="hint">Loading sync…</div>
+
+    <div id="syncSetup" style="display:none;">
+      <div class="btn-row" style="margin-top:0;">
+        <button class="small" id="createSyncCodeBtn">Create New Sync Code</button>
+        <button class="secondary small" id="showEnterCodeBtn">I Have a Sync Code</button>
+      </div>
+      <div id="enterCodeRow" style="display:none; margin-top:14px;">
+        <div class="grid">
+          <div class="field">
+            <label for="syncCodeInput">Sync code</label>
+            <input type="text" id="syncCodeInput" placeholder="Paste the code from your other device">
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="small" id="useSyncCodeBtn">Connect</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="syncConnected" style="display:none;">
+      <div class="grid" style="margin-top:0;">
+        <div class="field">
+          <label for="syncCodeDisplay">Your sync code — enter this on your other devices</label>
+          <input type="text" id="syncCodeDisplay" readonly>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="secondary small" id="copySyncCodeBtn">Copy Code</button>
+        <button class="secondary small" id="disconnectSyncBtn">Disconnect</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TIMELINE -->
+  <div class="card">
+    <div class="card-row"><h2 style="margin:0;">Goal Timeline</h2></div>
+    <div class="grid">
+      <div class="field">
+        <label for="goalStartDate">Start date</label>
+        <input type="date" id="goalStartDate">
+      </div>
+      <div class="field">
+        <label for="goalTargetDate">Goal date</label>
+        <input type="date" id="goalTargetDate">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button id="saveTimeline">Save Timeline</button>
+    </div>
+    <div id="timelineStat"></div>
+  </div>
+
+  <!-- WEIGHT -->
+  <div class="card metric-card metric-weight" id="weightCard">
+    <div class="card-row"><h2 style="margin:0;">Weight</h2></div>
+
+    <div class="grid">
+      <div class="field">
+        <label for="goalWeight">Goal weight (lbs)</label>
+        <input type="number" step="0.1" id="goalWeight" placeholder="e.g. 180">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn-metric small" id="saveGoalWeight">Save Goal</button>
+    </div>
+
+    <div class="grid" style="margin-top:18px;">
+      <div class="field">
+        <label for="weightDate">Date</label>
+        <input type="date" id="weightDate">
+      </div>
+      <div class="field">
+        <label for="weightValue">Weight (lbs)</label>
+        <input type="number" step="0.1" id="weightValue">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn-metric" id="saveWeightEntry">Log Weight</button>
+    </div>
+
+    <div class="stat-grid" id="weightStat" style="margin-top:18px;"></div>
+
+    <div class="legend" style="margin-top:18px;">
+      <span><span class="swatch" style="background:var(--weight-color)"></span>Weight</span>
+      <span><span class="swatch dash"></span>Goal</span>
+    </div>
+    <div class="chart-wrap" id="weightChart"></div>
+  </div>
+
+  <!-- BLOOD PRESSURE -->
+  <div class="card metric-card metric-bp" id="bpCard">
+    <div class="card-row"><h2 style="margin:0;">Blood Pressure</h2></div>
+
+    <div class="grid">
+      <div class="field">
+        <label for="goalSystolic" class="label-sys">Goal systolic</label>
+        <input type="number" step="1" id="goalSystolic" class="input-sys" placeholder="e.g. 120">
+      </div>
+      <div class="field">
+        <label for="goalDiastolic" class="label-dia">Goal diastolic</label>
+        <input type="number" step="1" id="goalDiastolic" class="input-dia" placeholder="e.g. 80">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn-metric small" id="saveGoalBp">Save Goal</button>
+    </div>
+
+    <div class="grid" style="margin-top:18px;">
+      <div class="field">
+        <label for="bpDate">Date</label>
+        <input type="date" id="bpDate">
+      </div>
+      <div class="field">
+        <label for="bpSystolic" class="label-sys">Systolic</label>
+        <input type="number" step="1" id="bpSystolic" class="input-sys">
+      </div>
+      <div class="field">
+        <label for="bpDiastolic" class="label-dia">Diastolic</label>
+        <input type="number" step="1" id="bpDiastolic" class="input-dia">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn-metric" id="saveBpEntry">Log Blood Pressure</button>
+    </div>
+
+    <div class="stat-grid" id="bpStat" style="margin-top:18px;"></div>
+
+    <div class="legend" style="margin-top:18px;">
+      <span><span class="swatch" style="background:var(--sys-color)"></span>Systolic</span>
+      <span><span class="swatch" style="background:var(--dia-color)"></span>Diastolic</span>
+      <span><span class="swatch dash"></span>Goal</span>
+    </div>
+    <div class="chart-wrap" id="bpChart"></div>
+  </div>
+
+  <!-- WATER -->
+  <div class="card metric-card metric-water" id="waterCard">
+    <div class="card-row"><h2 style="margin:0;">Water</h2></div>
+
+    <div class="grid">
+      <div class="field">
+        <label for="goalWater">Goal water (oz/day)</label>
+        <input type="number" step="1" id="goalWater" placeholder="e.g. 80">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn-metric small" id="saveGoalWater">Save Goal</button>
+    </div>
+
+    <div class="grid" style="margin-top:18px;">
+      <div class="field">
+        <label for="waterDate">Date</label>
+        <input type="date" id="waterDate">
+      </div>
+      <div class="field">
+        <label for="waterValue">Add water (oz)</label>
+        <input type="number" step="1" id="waterValue" placeholder="e.g. 8">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn-metric" id="saveWaterEntry">Add Water</button>
+    </div>
+    <div class="hint">Each entry adds to that day's running total — log it every time you drink some.</div>
+
+    <div class="stat-grid" id="waterStat" style="margin-top:18px;"></div>
+
+    <div class="legend" style="margin-top:18px;">
+      <span><span class="swatch" style="background:var(--water-color)"></span>Water (oz)</span>
+      <span><span class="swatch dash"></span>Goal</span>
+    </div>
+    <div class="chart-wrap" id="waterChart"></div>
+  </div>
+
+  <!-- TABLE -->
+  <div class="card">
+    <div class="card-row">
+      <h2 style="margin:0;">Entries</h2>
+      <div class="btn-row" style="margin-top:0;">
+        <button class="secondary small" id="exportBtn">Export JSON</button>
+        <label class="secondary small" style="display:inline-flex;align-items:center;padding:5px 10px;border-radius:6px;background:#eef1f5;cursor:pointer;margin:0;">
+          Import JSON
+          <input type="file" id="importFile" accept="application/json" style="display:none;">
+        </label>
+      </div>
+    </div>
+    <div id="tableWrap"></div>
+  </div>
+
+  <footer>Data is always saved locally in this browser. Connect a sync code above to keep it in sync live across all your devices, or use Export/Import to move it manually.</footer>
+</div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js';
+import { getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js';
+
+// ---- Firebase project config ----
+// Replace these placeholder values with the config object from your own Firebase
+// project (Project settings -> General -> Your apps -> SDK setup and configuration).
+// This value is meant to be public — access is controlled by Firestore security rules,
+// not by keeping this secret.
+const firebaseConfig = {
+  apiKey: "AIzaSyARHNdpxdCUBTtQ98A0Mu616U7zcoIoRfI",
+  authDomain: "health-tracker-6d52f.firebaseapp.com",
+  projectId: "health-tracker-6d52f",
+  storageBucket: "health-tracker-6d52f.firebasestorage.app",
+  messagingSenderId: "94865136065",
+  appId: "1:94865136065:web:d3d9c1fe27612a14abf740"
+};
+const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
+
+(function () {
+  const GOALS_KEY = 'healthTracker.goals';
+  const ENTRIES_KEY = 'healthTracker.entries';
+
+  let goals = loadGoals();
+  let entries = loadEntries();
+
+  function loadGoals() {
+    try {
+      return JSON.parse(localStorage.getItem(GOALS_KEY)) || {};
+    } catch (e) { return {}; }
+  }
+  function loadEntries() {
+    try {
+      return JSON.parse(localStorage.getItem(ENTRIES_KEY)) || [];
+    } catch (e) { return []; }
+  }
+  function saveGoalsToStorage() { localStorage.setItem(GOALS_KEY, JSON.stringify(goals)); pushToCloud(); }
+  function saveEntriesToStorage() { localStorage.setItem(ENTRIES_KEY, JSON.stringify(entries)); pushToCloud(); }
+
+  function todayStr() {
+    const d = new Date();
+    return d.toISOString().slice(0, 10);
+  }
+
+  function fmtDate(str) {
+    if (!str) return '';
+    const d = new Date(str + 'T00:00:00');
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  // ---------- Goals form ----------
+  function populateGoalsForm() {
+    document.getElementById('goalStartDate').value = goals.startDate || '';
+    document.getElementById('goalTargetDate').value = goals.targetDate || '';
+    document.getElementById('goalWeight').value = goals.weight ?? '';
+    document.getElementById('goalSystolic').value = goals.systolic ?? '';
+    document.getElementById('goalDiastolic').value = goals.diastolic ?? '';
+    document.getElementById('goalWater').value = goals.water ?? '';
+  }
+
+  function updateGoals(partial) {
+    goals = { ...goals, ...partial };
+    saveGoalsToStorage();
+    renderAll();
+  }
+
+  document.getElementById('saveTimeline').addEventListener('click', function () {
+    updateGoals({
+      startDate: document.getElementById('goalStartDate').value || null,
+      targetDate: document.getElementById('goalTargetDate').value || null,
+    });
+  });
+  document.getElementById('saveGoalWeight').addEventListener('click', function () {
+    updateGoals({ weight: parseFloatOrNull(document.getElementById('goalWeight').value) });
+  });
+  document.getElementById('saveGoalBp').addEventListener('click', function () {
+    updateGoals({
+      systolic: parseFloatOrNull(document.getElementById('goalSystolic').value),
+      diastolic: parseFloatOrNull(document.getElementById('goalDiastolic').value),
+    });
+  });
+  document.getElementById('saveGoalWater').addEventListener('click', function () {
+    updateGoals({ water: parseFloatOrNull(document.getElementById('goalWater').value) });
+  });
+
+  function parseFloatOrNull(v) {
+    if (v === '' || v === null || v === undefined) return null;
+    const n = parseFloat(v);
+    return isNaN(n) ? null : n;
+  }
+
+  // ---------- Entry forms (weight, blood pressure, water are logged independently) ----------
+  document.getElementById('weightDate').value = todayStr();
+  document.getElementById('bpDate').value = todayStr();
+  document.getElementById('waterDate').value = todayStr();
+
+  function cryptoId() {
+    return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+  }
+
+  // Upserts by date, only touching the fields passed in `partial` — this leaves
+  // any other metric already logged for that date (e.g. a morning weight) untouched.
+  function upsertEntry(date, partial) {
+    const idx = entries.findIndex(e => e.date === date);
+    if (idx !== -1) {
+      entries[idx] = { ...entries[idx], ...partial };
+    } else {
+      entries.push({ id: cryptoId(), date, weight: null, systolic: null, diastolic: null, water: null, ...partial });
+    }
+    saveEntriesToStorage();
+    renderAll();
+  }
+
+  document.getElementById('saveWeightEntry').addEventListener('click', function () {
+    const date = document.getElementById('weightDate').value;
+    if (!date) { alert('Please choose a date.'); return; }
+    const weight = parseFloatOrNull(document.getElementById('weightValue').value);
+    if (weight === null) { alert('Enter a weight value.'); return; }
+    upsertEntry(date, { weight });
+    document.getElementById('weightValue').value = '';
+  });
+
+  document.getElementById('saveBpEntry').addEventListener('click', function () {
+    const date = document.getElementById('bpDate').value;
+    if (!date) { alert('Please choose a date.'); return; }
+    const systolic = parseFloatOrNull(document.getElementById('bpSystolic').value);
+    const diastolic = parseFloatOrNull(document.getElementById('bpDiastolic').value);
+    if (systolic === null && diastolic === null) { alert('Enter systolic and/or diastolic.'); return; }
+    const partial = {};
+    if (systolic !== null) partial.systolic = systolic;
+    if (diastolic !== null) partial.diastolic = diastolic;
+    upsertEntry(date, partial);
+    document.getElementById('bpSystolic').value = '';
+    document.getElementById('bpDiastolic').value = '';
+  });
+
+  document.getElementById('saveWaterEntry').addEventListener('click', function () {
+    const date = document.getElementById('waterDate').value;
+    if (!date) { alert('Please choose a date.'); return; }
+    const amount = parseFloatOrNull(document.getElementById('waterValue').value);
+    if (amount === null) { alert('Enter a water amount.'); return; }
+    const existing = entries.find(e => e.date === date);
+    const runningTotal = (existing && existing.water !== null && existing.water !== undefined) ? existing.water : 0;
+    upsertEntry(date, { water: runningTotal + amount });
+    document.getElementById('waterValue').value = '';
+  });
+
+  function scrollToId(id) {
+    const el = document.getElementById(id);
+    if (el) window.scrollTo({ top: el.offsetTop - 20, behavior: 'smooth' });
+  }
+
+  // Clicking a logged value in the table loads it into that metric's own form for editing.
+  function editMetric(id, metric) {
+    const e = entries.find(x => x.id === id);
+    if (!e) return;
+    if (metric === 'weight') {
+      document.getElementById('weightDate').value = e.date;
+      document.getElementById('weightValue').value = e.weight ?? '';
+      scrollToId('weightCard');
+    } else if (metric === 'bp') {
+      document.getElementById('bpDate').value = e.date;
+      document.getElementById('bpSystolic').value = e.systolic ?? '';
+      document.getElementById('bpDiastolic').value = e.diastolic ?? '';
+      scrollToId('bpCard');
+    } else if (metric === 'water') {
+      // Water is a running total, not a single value to overwrite — jump to the
+      // Water section with the date pre-filled so the next amount adds onto this day.
+      document.getElementById('waterDate').value = e.date;
+      document.getElementById('waterValue').value = '';
+      scrollToId('waterCard');
+    }
+  }
+
+  // Clears just one metric's value for a date, leaving the others on that date intact.
+  function clearMetric(id, metric) {
+    const idx = entries.findIndex(e => e.id === id);
+    if (idx === -1) return;
+    if (!confirm('Clear this value?')) return;
+    const e = entries[idx];
+    if (metric === 'weight') e.weight = null;
+    else if (metric === 'bp') { e.systolic = null; e.diastolic = null; }
+    else if (metric === 'water') e.water = null;
+    if (e.weight == null && e.systolic == null && e.diastolic == null && e.water == null) {
+      entries.splice(idx, 1);
+    }
+    saveEntriesToStorage();
+    renderAll();
+  }
+
+  function deleteEntry(id) {
+    if (!confirm('Delete everything logged for this date?')) return;
+    entries = entries.filter(e => e.id !== id);
+    saveEntriesToStorage();
+    renderAll();
+  }
+
+  // ---------- Table ----------
+  function metricCell(entry, metric, text) {
+    if (text === null) return '—';
+    const editTitle = metric === 'water' ? 'Click to add more water for this date' : 'Click to edit';
+    return `<span class="cell-value" data-editcell data-id="${entry.id}" data-metric="${metric}" title="${editTitle}">${text}</span>` +
+      `<button class="clear-x" data-clear data-id="${entry.id}" data-metric="${metric}" title="Clear this value">✕</button>`;
+  }
+
+  function renderTable() {
+    const wrap = document.getElementById('tableWrap');
+    if (entries.length === 0) {
+      wrap.innerHTML = '<div class="empty-state">No entries yet. Log your first metric above.</div>';
+      return;
+    }
+    const sorted = [...entries].sort((a, b) => b.date.localeCompare(a.date));
+    let html = '<table><thead><tr><th>Date</th><th>Weight</th><th>Blood Pressure</th><th>Water</th><th></th></tr></thead><tbody>';
+    for (const e of sorted) {
+      html += `<tr>
+        <td>${fmtDate(e.date)}</td>
+        <td>${metricCell(e, 'weight', e.weight !== null && e.weight !== undefined ? e.weight + ' lbs' : null)}</td>
+        <td>${metricCell(e, 'bp', (e.systolic != null || e.diastolic != null) ? bpValueHtml(e.systolic, e.diastolic) : null)}</td>
+        <td>${metricCell(e, 'water', e.water !== null && e.water !== undefined ? e.water + ' oz' : null)}</td>
+        <td class="actions-cell">
+          <button class="danger" data-del="${e.id}">Delete</button>
+        </td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+    wrap.querySelectorAll('[data-editcell]').forEach(el => el.addEventListener('click', () => editMetric(el.dataset.id, el.dataset.metric)));
+    wrap.querySelectorAll('[data-clear]').forEach(el => el.addEventListener('click', () => clearMetric(el.dataset.id, el.dataset.metric)));
+    wrap.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', () => deleteEntry(btn.dataset.del)));
+  }
+
+  // ---------- Timeline / stats ----------
+  function daysBetween(a, b) {
+    const d1 = new Date(a + 'T00:00:00');
+    const d2 = new Date(b + 'T00:00:00');
+    return Math.round((d2 - d1) / 86400000);
+  }
+
+  function renderTimeline() {
+    const el = document.getElementById('timelineStat');
+    if (!goals.startDate || !goals.targetDate) {
+      el.innerHTML = '<div class="hint">Set a start date and goal date to see your timeline progress.</div>';
+      return;
+    }
+    const total = daysBetween(goals.startDate, goals.targetDate);
+    const today = todayStr();
+    let elapsed = daysBetween(goals.startDate, today);
+    elapsed = Math.max(0, Math.min(elapsed, total));
+    const pct = total > 0 ? Math.round((elapsed / total) * 100) : 0;
+    const remaining = Math.max(0, daysBetween(today, goals.targetDate));
+    const status = remaining === 0 ? 'Goal date reached' : `${remaining} day${remaining === 1 ? '' : 's'} remaining`;
+    el.innerHTML = `
+      <div class="hint" style="margin-top:14px;">${fmtDate(goals.startDate)} → ${fmtDate(goals.targetDate)} · ${status} · ${pct}% of time elapsed</div>
+      <div class="progress-bar-track"><div class="progress-bar-fill" style="width:${pct}%;"></div></div>
+    `;
+  }
+
+  function latestEntryOnOrBefore(field, dateStr) {
+    const candidates = entries.filter(e => e[field] !== null && e[field] !== undefined && e.date <= dateStr).sort((a, b) => b.date.localeCompare(a.date));
+    return candidates.length ? candidates[0] : null;
+  }
+
+  function firstEntryWithField(field) {
+    const candidates = entries.filter(e => e[field] !== null && e[field] !== undefined).sort((a, b) => a.date.localeCompare(b.date));
+    return candidates.length ? candidates[0] : null;
+  }
+
+  function renderStats() {
+    const today = todayStr();
+
+    const latestWeightEntry = latestEntryOnOrBefore('weight', today) || firstEntryWithField('weight');
+    const firstWeightEntry = firstEntryWithField('weight');
+    document.getElementById('weightStat').innerHTML = statBlock('Current Weight',
+      latestWeightEntry ? latestWeightEntry.weight + ' lbs' : '—',
+      weightDelta(firstWeightEntry, latestWeightEntry, goals.weight));
+
+    const latestBpSys = latestEntryOnOrBefore('systolic', today) || firstEntryWithField('systolic');
+    const latestBpDia = latestEntryOnOrBefore('diastolic', today) || firstEntryWithField('diastolic');
+    document.getElementById('bpStat').innerHTML = statBlock('Current Blood Pressure',
+      bpValueHtml(latestBpSys ? latestBpSys.systolic : null, latestBpDia ? latestBpDia.diastolic : null),
+      bpDelta(latestBpSys, latestBpDia, goals.systolic, goals.diastolic));
+
+    const todayWater = entries.find(e => e.date === today && e.water !== null && e.water !== undefined);
+    document.getElementById('waterStat').innerHTML = statBlock("Today's Water",
+      todayWater ? todayWater.water + ' oz' : '0 oz',
+      goals.water ? waterDelta(todayWater ? todayWater.water : 0, goals.water) : '');
+  }
+
+  function bpValueHtml(systolic, diastolic) {
+    if (systolic == null && diastolic == null) return '—';
+    return `<span class="bp-value-sys">${systolic ?? '—'}</span>/<span class="bp-value-dia">${diastolic ?? '—'}</span>`;
+  }
+
+  function statBlock(label, value, delta) {
+    return `<div class="stat">
+      <div class="label">${label}</div>
+      <div class="value">${value}</div>
+      ${delta ? `<div class="delta">${delta}</div>` : ''}
+    </div>`;
+  }
+
+  function weightDelta(first, latest, goalWeight) {
+    if (!latest || goalWeight === null || goalWeight === undefined) return '';
+    const remaining = (latest.weight - goalWeight);
+    const dir = remaining > 0 ? 'to lose' : remaining < 0 ? 'to gain' : '';
+    if (Math.abs(remaining) < 0.05) return `<span class="delta pos">Goal reached 🎉</span>`;
+    return `<span>${Math.abs(remaining).toFixed(1)} lbs ${dir} (goal ${goalWeight} lbs)</span>`;
+  }
+
+  function bpDelta(sysE, diaE, goalSys, goalDia) {
+    if (!sysE && !diaE) return '';
+    if (goalSys === null && goalDia === null) return '';
+    const sys = sysE ? sysE.systolic : null;
+    const dia = diaE ? diaE.diastolic : null;
+    const parts = [];
+    if (sys !== null && goalSys !== null && goalSys !== undefined) parts.push(`sys ${sys > goalSys ? '+' + (sys - goalSys) : (sys - goalSys)}`);
+    if (dia !== null && goalDia !== null && goalDia !== undefined) parts.push(`dia ${dia > goalDia ? '+' + (dia - goalDia) : (dia - goalDia)}`);
+    return parts.length ? `<span>vs goal: ${parts.join(', ')}</span>` : '';
+  }
+
+  function waterDelta(current, goal) {
+    const diff = goal - current;
+    if (diff <= 0) return `<span class="delta pos">Goal met 🎉</span>`;
+    return `<span>${diff} oz to go</span>`;
+  }
+
+  // ---------- Charts (hand-rolled SVG) ----------
+  function drawLineChart(containerId, series, opts) {
+    const container = document.getElementById(containerId);
+    const width = Math.max(600, container.clientWidth || 600);
+    const height = 220;
+    const padL = 44, padR = 16, padT = 16, padB = 30;
+    const plotW = width - padL - padR;
+    const plotH = height - padT - padB;
+
+    const allDates = new Set();
+    series.forEach(s => s.points.forEach(p => allDates.add(p.x)));
+    const dates = [...allDates].sort();
+
+    if (dates.length === 0) {
+      container.innerHTML = '<div class="no-data">No data yet.</div>';
+      return;
+    }
+
+    const minDate = dates[0];
+    const maxDate = dates[dates.length - 1];
+    const dateSpan = Math.max(1, daysBetween(minDate, maxDate));
+
+    let allYVals = [];
+    series.forEach(s => s.points.forEach(p => allYVals.push(p.y)));
+    if (opts && opts.goalLine && opts.goalLine.value !== null && opts.goalLine.value !== undefined) allYVals.push(opts.goalLine.value);
+    if (opts && opts.goalLine2 && opts.goalLine2.value !== null && opts.goalLine2.value !== undefined) allYVals.push(opts.goalLine2.value);
+    let minY = Math.min(...allYVals);
+    let maxY = Math.max(...allYVals);
+    if (minY === maxY) { minY -= 5; maxY += 5; }
+    const pad = (maxY - minY) * 0.1;
+    minY -= pad; maxY += pad;
+
+    function xPix(dateStr) { return padL + (daysBetween(minDate, dateStr) / dateSpan) * plotW; }
+    function yPix(val) { return padT + plotH - ((val - minY) / (maxY - minY)) * plotH; }
+
+    let svg = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`;
+
+    // gridlines + y labels
+    const gridLines = 4;
+    for (let i = 0; i <= gridLines; i++) {
+      const val = minY + ((maxY - minY) * i) / gridLines;
+      const y = yPix(val);
+      svg += `<line x1="${padL}" y1="${y}" x2="${width - padR}" y2="${y}" stroke="#eef1f5" stroke-width="1"/>`;
+      svg += `<text x="${padL - 8}" y="${y + 4}" font-size="10" fill="#6b7684" text-anchor="end">${val.toFixed(0)}</text>`;
+    }
+
+    // x labels (start, mid, end)
+    [minDate, maxDate].forEach(d => {
+      svg += `<text x="${xPix(d)}" y="${height - 8}" font-size="10" fill="#6b7684" text-anchor="middle">${fmtDate(d)}</text>`;
+    });
+
+    // goal line
+    if (opts && opts.goalLine && opts.goalLine.value !== null && opts.goalLine.value !== undefined) {
+      const gy = yPix(opts.goalLine.value);
+      svg += `<line x1="${padL}" y1="${gy}" x2="${width - padR}" y2="${gy}" stroke="var(--goal-color)" stroke-width="1.5" stroke-dasharray="5,4"/>`;
+    }
+    if (opts && opts.goalLine2 && opts.goalLine2.value !== null && opts.goalLine2.value !== undefined) {
+      const gy = yPix(opts.goalLine2.value);
+      svg += `<line x1="${padL}" y1="${gy}" x2="${width - padR}" y2="${gy}" stroke="var(--goal-color)" stroke-width="1.5" stroke-dasharray="5,4"/>`;
+    }
+
+    // series lines
+    series.forEach(s => {
+      const pts = s.points.slice().sort((a, b) => a.x.localeCompare(b.x));
+      if (pts.length === 0) return;
+      const path = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xPix(p.x).toFixed(1)} ${yPix(p.y).toFixed(1)}`).join(' ');
+      svg += `<path d="${path}" fill="none" stroke="${s.color}" stroke-width="2"/>`;
+      pts.forEach(p => {
+        svg += `<circle cx="${xPix(p.x).toFixed(1)}" cy="${yPix(p.y).toFixed(1)}" r="2.5" fill="${s.color}"/>`;
+      });
+    });
+
+    svg += '</svg>';
+    container.innerHTML = svg;
+  }
+
+  function drawBarChart(containerId, points, color, goalValue) {
+    const container = document.getElementById(containerId);
+    const width = Math.max(600, container.clientWidth || 600);
+    const height = 220;
+    const padL = 44, padR = 16, padT = 16, padB = 30;
+    const plotW = width - padL - padR;
+    const plotH = height - padT - padB;
+
+    if (points.length === 0) {
+      container.innerHTML = '<div class="no-data">No data yet.</div>';
+      return;
+    }
+
+    const sorted = points.slice().sort((a, b) => a.x.localeCompare(b.x));
+    let maxY = Math.max(...sorted.map(p => p.y), goalValue || 0) * 1.15;
+    if (maxY === 0) maxY = 10;
+
+    function yPix(val) { return padT + plotH - (val / maxY) * plotH; }
+
+    const barW = Math.min(28, plotW / sorted.length - 6);
+
+    let svg = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`;
+
+    const gridLines = 4;
+    for (let i = 0; i <= gridLines; i++) {
+      const val = (maxY * i) / gridLines;
+      const y = yPix(val);
+      svg += `<line x1="${padL}" y1="${y}" x2="${width - padR}" y2="${y}" stroke="#eef1f5" stroke-width="1"/>`;
+      svg += `<text x="${padL - 8}" y="${y + 4}" font-size="10" fill="#6b7684" text-anchor="end">${val.toFixed(0)}</text>`;
+    }
+
+    if (goalValue !== null && goalValue !== undefined) {
+      const gy = yPix(goalValue);
+      svg += `<line x1="${padL}" y1="${gy}" x2="${width - padR}" y2="${gy}" stroke="var(--goal-color)" stroke-width="1.5" stroke-dasharray="5,4"/>`;
+    }
+
+    sorted.forEach((p, i) => {
+      const x = padL + (plotW / sorted.length) * i + ((plotW / sorted.length) - barW) / 2;
+      const y = yPix(p.y);
+      const barH = padT + plotH - y;
+      svg += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" fill="${color}" rx="2"/>`;
+    });
+
+    [sorted[0], sorted[sorted.length - 1]].forEach((p, idx) => {
+      const i = idx === 0 ? 0 : sorted.length - 1;
+      const x = padL + (plotW / sorted.length) * i + (plotW / sorted.length) / 2;
+      svg += `<text x="${x.toFixed(1)}" y="${height - 8}" font-size="10" fill="#6b7684" text-anchor="middle">${fmtDate(p.x)}</text>`;
+    });
+
+    svg += '</svg>';
+    container.innerHTML = svg;
+  }
+
+  function renderCharts() {
+    const weightPts = entries.filter(e => e.weight !== null && e.weight !== undefined).map(e => ({ x: e.date, y: e.weight }));
+    drawLineChart('weightChart', [{ points: weightPts, color: 'var(--weight-color)' }], {
+      goalLine: { value: goals.weight ?? null }
+    });
+
+    const sysPts = entries.filter(e => e.systolic !== null && e.systolic !== undefined).map(e => ({ x: e.date, y: e.systolic }));
+    const diaPts = entries.filter(e => e.diastolic !== null && e.diastolic !== undefined).map(e => ({ x: e.date, y: e.diastolic }));
+    drawLineChart('bpChart', [
+      { points: sysPts, color: 'var(--sys-color)' },
+      { points: diaPts, color: 'var(--dia-color)' }
+    ], {
+      goalLine: { value: goals.systolic ?? null },
+      goalLine2: { value: goals.diastolic ?? null }
+    });
+
+    const waterPts = entries.filter(e => e.water !== null && e.water !== undefined).map(e => ({ x: e.date, y: e.water }));
+    drawBarChart('waterChart', waterPts, 'var(--water-color)', goals.water ?? null);
+  }
+
+  // ---------- Export / Import ----------
+  document.getElementById('exportBtn').addEventListener('click', function () {
+    const data = { goals, entries };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `health-tracker-export-${todayStr()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  document.getElementById('importFile').addEventListener('change', function (evt) {
+    const file = evt.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function () {
+      try {
+        const data = JSON.parse(reader.result);
+        if (data.goals) goals = data.goals;
+        if (Array.isArray(data.entries)) entries = data.entries;
+        saveGoalsToStorage();
+        saveEntriesToStorage();
+        populateGoalsForm();
+        renderAll();
+        alert('Import complete.');
+      } catch (e) {
+        alert('Could not read that file: ' + e.message);
+      }
+    };
+    reader.readAsText(file);
+    evt.target.value = '';
+  });
+
+  // ---------- Cross-device sync (Firebase Firestore) ----------
+  // Data lives in a Firestore document keyed by a private "sync code." Any device that
+  // enters the same code shares that document in real time — this works in any browser,
+  // including iPhone Safari, unlike the old local-file approach.
+  const SYNC_CODE_KEY = 'healthTracker.syncCode';
+  let syncCode = localStorage.getItem(SYNC_CODE_KEY) || null;
+  let db = null;
+  let auth = null;
+  let authReady = null;
+  let unsubscribeSnapshot = null;
+
+  if (FIREBASE_CONFIGURED) {
+    const firebaseApp = initializeApp(firebaseConfig);
+    auth = getAuth(firebaseApp);
+    db = getFirestore(firebaseApp);
+    authReady = new Promise((resolve) => {
+      onAuthStateChanged(auth, (user) => { if (user) resolve(user); });
+      signInAnonymously(auth).catch((e) => console.error('Anonymous sign-in failed', e));
+    });
+  }
+
+  function syncDocRef(code) {
+    return doc(db, 'syncedTrackers', code);
+  }
+
+  function renderSyncUI() {
+    const statusEl = document.getElementById('syncStatus');
+    const setupEl = document.getElementById('syncSetup');
+    const connectedEl = document.getElementById('syncConnected');
+    if (!FIREBASE_CONFIGURED) {
+      statusEl.innerHTML = "Sync isn't set up for this copy of the app yet.";
+      setupEl.style.display = 'none';
+      connectedEl.style.display = 'none';
+      return;
+    }
+    if (syncCode) {
+      statusEl.innerHTML = 'Live sync is on — changes on this device appear on any other device connected with the same code.';
+      setupEl.style.display = 'none';
+      connectedEl.style.display = 'block';
+      document.getElementById('syncCodeDisplay').value = syncCode;
+    } else {
+      statusEl.innerHTML = 'Not connected. Create a new sync code on your first device, then enter that same code on your other devices (including your iPhone).';
+      setupEl.style.display = 'block';
+      connectedEl.style.display = 'none';
+    }
+  }
+
+  async function pushToCloud() {
+    if (!FIREBASE_CONFIGURED || !syncCode) return;
+    try {
+      await authReady;
+      await setDoc(syncDocRef(syncCode), { goals, entries, updatedAt: serverTimestamp() });
+    } catch (e) {
+      console.error('Cloud sync write failed', e);
+    }
+  }
+
+  function applyRemoteData(data) {
+    if (data.goals) goals = data.goals;
+    if (Array.isArray(data.entries)) entries = data.entries;
+    localStorage.setItem(GOALS_KEY, JSON.stringify(goals));
+    localStorage.setItem(ENTRIES_KEY, JSON.stringify(entries));
+    populateGoalsForm();
+    renderAll();
+  }
+
+  function attachLiveSync(code) {
+    if (unsubscribeSnapshot) unsubscribeSnapshot();
+    unsubscribeSnapshot = onSnapshot(syncDocRef(code), (snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data();
+      const localJson = JSON.stringify({ goals, entries });
+      const remoteJson = JSON.stringify({ goals: data.goals || {}, entries: data.entries || [] });
+      if (localJson !== remoteJson) applyRemoteData(data);
+    }, (e) => console.error('Live sync listener error', e));
+  }
+
+  async function connectWithCode(code, isNew) {
+    await authReady;
+    if (isNew) {
+      await setDoc(syncDocRef(code), { goals, entries, updatedAt: serverTimestamp() });
+    } else {
+      const snap = await getDoc(syncDocRef(code));
+      const data = snap.exists() ? snap.data() : null;
+      const remoteHasData = data && Array.isArray(data.entries) && data.entries.length > 0;
+      const localHasData = entries.length > 0 || goals.startDate || goals.targetDate;
+      if (remoteHasData && localHasData) {
+        const useRemote = confirm(
+          `This sync code already has ${data.entries.length} entr${data.entries.length === 1 ? 'y' : 'ies'}.\n\n` +
+          `OK = load that data (replaces what's shown here on this device).\n` +
+          `Cancel = keep what's shown here and overwrite the synced data with it instead.`
+        );
+        if (useRemote) applyRemoteData(data);
+        else await setDoc(syncDocRef(code), { goals, entries, updatedAt: serverTimestamp() });
+      } else if (remoteHasData) {
+        applyRemoteData(data);
+      } else {
+        await setDoc(syncDocRef(code), { goals, entries, updatedAt: serverTimestamp() });
+      }
+    }
+    syncCode = code;
+    localStorage.setItem(SYNC_CODE_KEY, syncCode);
+    attachLiveSync(syncCode);
+    renderSyncUI();
+  }
+
+  document.getElementById('createSyncCodeBtn').addEventListener('click', function () {
+    const code = crypto.randomUUID().replace(/-/g, '');
+    connectWithCode(code, true);
+  });
+  document.getElementById('showEnterCodeBtn').addEventListener('click', function () {
+    document.getElementById('enterCodeRow').style.display = 'block';
+  });
+  document.getElementById('useSyncCodeBtn').addEventListener('click', function () {
+    const code = document.getElementById('syncCodeInput').value.trim();
+    if (!code) { alert('Paste a sync code first.'); return; }
+    connectWithCode(code, false);
+  });
+  document.getElementById('copySyncCodeBtn').addEventListener('click', function () {
+    navigator.clipboard.writeText(syncCode).then(() => alert('Sync code copied.'));
+  });
+  document.getElementById('disconnectSyncBtn').addEventListener('click', function () {
+    if (unsubscribeSnapshot) unsubscribeSnapshot();
+    unsubscribeSnapshot = null;
+    syncCode = null;
+    localStorage.removeItem(SYNC_CODE_KEY);
+    renderSyncUI();
+  });
+
+  renderSyncUI();
+  if (FIREBASE_CONFIGURED && syncCode) attachLiveSync(syncCode);
+
+  // ---------- Render all ----------
+  function renderAll() {
+    renderTimeline();
+    renderStats();
+    renderTable();
+    renderCharts();
+  }
+
+  populateGoalsForm();
+  renderAll();
+  window.addEventListener('resize', renderCharts);
+})();
+</script>
+</body>
+</html>
