@@ -153,6 +153,12 @@
   .cell-value { cursor: pointer; border-bottom: 1px dotted var(--muted); }
   .cell-value:hover { color: var(--accent); }
   .clear-x { background: none; border: none; color: #b91c1c; font-size: 11px; padding: 0 0 0 6px; cursor: pointer; font-weight: 700; }
+  .day-detail { margin-top: 14px; padding: 12px 14px; background: #fafbfc; border: 1px solid var(--border); border-radius: 8px; }
+  .day-detail-title { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+  .day-detail-close { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; font-weight: 700; padding: 0; line-height: 1; }
+  .day-detail-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; border-bottom: 1px solid var(--border); }
+  .day-detail-row:last-child { border-bottom: none; }
+  .day-detail-empty { font-size: 13px; color: var(--muted); }
   /* Blood pressure section: systolic red, diastolic blue, shown as a two-tone border and per-field coloring */
   .metric-bp {
     border-image: linear-gradient(180deg, var(--sys-color), var(--dia-color)) 1;
@@ -233,6 +239,8 @@
       </div>
     </div>
 
+    <div class="stat-grid" id="waterProgressStat" style="margin-top:18px;"></div>
+
     <div class="stat-grid" id="waterStat" style="margin-top:18px;"></div>
 
     <div class="grid" style="margin-top:18px;">
@@ -254,7 +262,9 @@
       <span><span class="swatch" style="background:var(--water-color)"></span>Water (oz)</span>
       <span><span class="swatch dash"></span>Goal</span>
     </div>
+    <div class="hint">Click a bar to see that day's individual entries.</div>
     <div class="chart-wrap" id="waterChart"></div>
+    <div id="waterDayDetail" class="day-detail" style="display:none;"></div>
   </div>
 
   <!-- WEIGHT -->
@@ -438,9 +448,12 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
 (function () {
   const GOALS_KEY = 'healthTracker.goals';
   const ENTRIES_KEY = 'healthTracker.entries';
+  const WATER_LOG_KEY = 'healthTracker.waterLog';
 
   let goals = loadGoals();
   let entries = loadEntries();
+  let waterLog = loadWaterLog();
+  let openWaterDetailDate = null;
 
   function loadGoals() {
     try {
@@ -452,8 +465,14 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
       return JSON.parse(localStorage.getItem(ENTRIES_KEY)) || [];
     } catch (e) { return []; }
   }
+  function loadWaterLog() {
+    try {
+      return JSON.parse(localStorage.getItem(WATER_LOG_KEY)) || [];
+    } catch (e) { return []; }
+  }
   function saveGoalsToStorage() { localStorage.setItem(GOALS_KEY, JSON.stringify(goals)); pushToCloud(); }
   function saveEntriesToStorage() { localStorage.setItem(ENTRIES_KEY, JSON.stringify(entries)); pushToCloud(); }
+  function saveWaterLogToStorage() { localStorage.setItem(WATER_LOG_KEY, JSON.stringify(waterLog)); pushToCloud(); }
 
   function todayStr() {
     const d = new Date();
@@ -607,7 +626,10 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     const existing = entries.find(e => e.date === date);
     const runningTotal = (existing && existing.water !== null && existing.water !== undefined) ? existing.water : 0;
     upsertEntry(date, { water: runningTotal + amount });
+    waterLog.push({ id: cryptoId(), date, time: new Date().toISOString(), amount });
+    saveWaterLogToStorage();
     document.getElementById('waterValue').value = '';
+    if (openWaterDetailDate === date) renderWaterDayDetail(date);
   });
 
   function scrollToId(id) {
@@ -645,7 +667,10 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     const e = entries[idx];
     if (metric === 'weight') e.weight = null;
     else if (metric === 'bp') { e.systolic = null; e.diastolic = null; }
-    else if (metric === 'water') e.water = null;
+    else if (metric === 'water') {
+      e.water = null;
+      clearWaterLogForDate(e.date);
+    }
     if (e.weight == null && e.systolic == null && e.diastolic == null && e.water == null) {
       entries.splice(idx, 1);
     }
@@ -653,9 +678,20 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     renderAll();
   }
 
+  function clearWaterLogForDate(date) {
+    waterLog = waterLog.filter(w => w.date !== date);
+    saveWaterLogToStorage();
+    if (openWaterDetailDate === date) {
+      openWaterDetailDate = null;
+      document.getElementById('waterDayDetail').style.display = 'none';
+    }
+  }
+
   function deleteEntry(id) {
     if (!confirm('Delete everything logged for this date?')) return;
-    entries = entries.filter(e => e.id !== id);
+    const e = entries.find(x => x.id === id);
+    entries = entries.filter(x => x.id !== id);
+    if (e) clearWaterLogForDate(e.date);
     saveEntriesToStorage();
     renderAll();
   }
@@ -767,6 +803,34 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     document.getElementById('waterStat').innerHTML = statBlock("Today's Water",
       todayWater ? todayWater.water + ' oz' : '0 oz',
       goals.water ? waterDelta(todayWater ? todayWater.water : 0, goals.water) : '');
+  }
+
+  // Counts days elapsed in the goal timeline and how many of those days hit the water goal.
+  function renderWaterProgress() {
+    const wrap = document.getElementById('waterProgressStat');
+    if (!goals.startDate || !goals.targetDate) {
+      wrap.innerHTML = '<div class="hint">Set a start date and goal date (in Goal Timeline) to track days elapsed and days achieved.</div>';
+      return;
+    }
+    const today = todayStr();
+    const endBound = today < goals.targetDate ? today : goals.targetDate;
+    const daysElapsed = Math.max(0, daysBetween(goals.startDate, endBound) + 1);
+
+    let achievedValue;
+    if (goals.water !== null && goals.water !== undefined) {
+      const achievedCount = entries.filter(e =>
+        e.date >= goals.startDate && e.date <= endBound &&
+        e.water !== null && e.water !== undefined && e.water >= goals.water
+      ).length;
+      achievedValue = `${achievedCount} of ${daysElapsed} day${daysElapsed === 1 ? '' : 's'}`;
+    } else {
+      achievedValue = 'Set a water goal to track';
+    }
+
+    let html = '';
+    html += statBlock('Days Elapsed', daysElapsed + ' day' + (daysElapsed === 1 ? '' : 's'), '');
+    html += statBlock('Goal Achieved', achievedValue, '');
+    wrap.innerHTML = html;
   }
 
   function bpValueHtml(systolic, diastolic) {
@@ -883,7 +947,7 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     container.innerHTML = svg;
   }
 
-  function drawBarChart(containerId, points, color, goalValue) {
+  function drawBarChart(containerId, points, color, goalValue, opts) {
     const container = document.getElementById(containerId);
     const width = Math.max(280, container.clientWidth || 600);
     const height = 220;
@@ -919,11 +983,15 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
       svg += `<line x1="${padL}" y1="${gy}" x2="${width - padR}" y2="${gy}" stroke="var(--goal-color)" stroke-width="1.5" stroke-dasharray="5,4"/>`;
     }
 
+    const clickable = opts && typeof opts.onBarClick === 'function';
     sorted.forEach((p, i) => {
       const x = padL + (plotW / sorted.length) * i + ((plotW / sorted.length) - barW) / 2;
       const y = yPix(p.y);
       const barH = padT + plotH - y;
-      svg += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" fill="${color}" rx="2"/>`;
+      const selected = opts && opts.selectedDate === p.x;
+      const stroke = selected ? ` stroke="${color}" stroke-width="2" stroke-opacity="0.9"` : '';
+      const pad = selected ? 2 : 0;
+      svg += `<rect data-date="${p.x}" x="${(x - pad).toFixed(1)}" y="${(y - pad).toFixed(1)}" width="${(barW + pad * 2).toFixed(1)}" height="${(barH + pad).toFixed(1)}" fill="${color}" rx="2"${stroke}${clickable ? ' style="cursor:pointer"' : ''}/>`;
     });
 
     [sorted[0], sorted[sorted.length - 1]].forEach((p, idx) => {
@@ -934,6 +1002,12 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
 
     svg += '</svg>';
     container.innerHTML = svg;
+
+    if (clickable) {
+      container.querySelectorAll('rect[data-date]').forEach(rect => {
+        rect.addEventListener('click', () => opts.onBarClick(rect.getAttribute('data-date')));
+      });
+    }
   }
 
   function renderCharts() {
@@ -953,12 +1027,45 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     });
 
     const waterPts = entries.filter(e => e.water !== null && e.water !== undefined).map(e => ({ x: e.date, y: e.water }));
-    drawBarChart('waterChart', waterPts, 'var(--water-color)', goals.water ?? null);
+    drawBarChart('waterChart', waterPts, 'var(--water-color)', goals.water ?? null, {
+      onBarClick: toggleWaterDayDetail,
+      selectedDate: openWaterDetailDate
+    });
+  }
+
+  // ---------- Water day detail (individual timestamped entries) ----------
+  function toggleWaterDayDetail(date) {
+    if (openWaterDetailDate === date) {
+      openWaterDetailDate = null;
+      document.getElementById('waterDayDetail').style.display = 'none';
+      renderCharts();
+      return;
+    }
+    openWaterDetailDate = date;
+    renderWaterDayDetail(date);
+    renderCharts();
+  }
+
+  function renderWaterDayDetail(date) {
+    const wrap = document.getElementById('waterDayDetail');
+    const dayEntries = waterLog.filter(w => w.date === date).sort((a, b) => a.time.localeCompare(b.time));
+    const rows = dayEntries.length
+      ? dayEntries.map(w => `<div class="day-detail-row"><span>${new Date(w.time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span><span>${w.amount} oz</span></div>`).join('')
+      : '<div class="day-detail-empty">No individual entries recorded for this day.</div>';
+    wrap.innerHTML = `
+      <div class="day-detail-title">
+        <span>${fmtDate(date)}</span>
+        <button class="day-detail-close" id="closeWaterDayDetail" title="Close">✕</button>
+      </div>
+      ${rows}
+    `;
+    wrap.style.display = 'block';
+    document.getElementById('closeWaterDayDetail').addEventListener('click', () => toggleWaterDayDetail(date));
   }
 
   // ---------- Export / Import ----------
   document.getElementById('exportBtn').addEventListener('click', function () {
-    const data = { goals, entries };
+    const data = { goals, entries, waterLog };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -977,8 +1084,10 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
         const data = JSON.parse(reader.result);
         if (data.goals) goals = data.goals;
         if (Array.isArray(data.entries)) entries = data.entries;
+        if (Array.isArray(data.waterLog)) waterLog = data.waterLog;
         saveGoalsToStorage();
         saveEntriesToStorage();
+        saveWaterLogToStorage();
         populateGoalsForm();
         renderAll();
         alert('Import complete.');
@@ -1041,7 +1150,7 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     if (!FIREBASE_CONFIGURED || !syncCode) return;
     try {
       await authReady;
-      await setDoc(syncDocRef(syncCode), { goals, entries, updatedAt: serverTimestamp() });
+      await setDoc(syncDocRef(syncCode), { goals, entries, waterLog, updatedAt: serverTimestamp() });
     } catch (e) {
       console.error('Cloud sync write failed', e);
     }
@@ -1050,8 +1159,12 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
   function applyRemoteData(data) {
     if (data.goals) goals = data.goals;
     if (Array.isArray(data.entries)) entries = data.entries;
+    if (Array.isArray(data.waterLog)) waterLog = data.waterLog;
     localStorage.setItem(GOALS_KEY, JSON.stringify(goals));
     localStorage.setItem(ENTRIES_KEY, JSON.stringify(entries));
+    localStorage.setItem(WATER_LOG_KEY, JSON.stringify(waterLog));
+    openWaterDetailDate = null;
+    document.getElementById('waterDayDetail').style.display = 'none';
     populateGoalsForm();
     renderAll();
   }
@@ -1061,8 +1174,8 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     unsubscribeSnapshot = onSnapshot(syncDocRef(code), (snap) => {
       if (!snap.exists()) return;
       const data = snap.data();
-      const localJson = JSON.stringify({ goals, entries });
-      const remoteJson = JSON.stringify({ goals: data.goals || {}, entries: data.entries || [] });
+      const localJson = JSON.stringify({ goals, entries, waterLog });
+      const remoteJson = JSON.stringify({ goals: data.goals || {}, entries: data.entries || [], waterLog: data.waterLog || [] });
       if (localJson !== remoteJson) applyRemoteData(data);
     }, (e) => console.error('Live sync listener error', e));
   }
@@ -1070,7 +1183,7 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
   async function connectWithCode(code, isNew) {
     await authReady;
     if (isNew) {
-      await setDoc(syncDocRef(code), { goals, entries, updatedAt: serverTimestamp() });
+      await setDoc(syncDocRef(code), { goals, entries, waterLog, updatedAt: serverTimestamp() });
     } else {
       const snap = await getDoc(syncDocRef(code));
       const data = snap.exists() ? snap.data() : null;
@@ -1083,11 +1196,11 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
           `Cancel = keep what's shown here and overwrite the synced data with it instead.`
         );
         if (useRemote) applyRemoteData(data);
-        else await setDoc(syncDocRef(code), { goals, entries, updatedAt: serverTimestamp() });
+        else await setDoc(syncDocRef(code), { goals, entries, waterLog, updatedAt: serverTimestamp() });
       } else if (remoteHasData) {
         applyRemoteData(data);
       } else {
-        await setDoc(syncDocRef(code), { goals, entries, updatedAt: serverTimestamp() });
+        await setDoc(syncDocRef(code), { goals, entries, waterLog, updatedAt: serverTimestamp() });
       }
     }
     syncCode = code;
@@ -1127,6 +1240,7 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     renderTimeline();
     renderGoalDisplays();
     renderStats();
+    renderWaterProgress();
     renderTable();
     renderCharts();
   }
