@@ -541,6 +541,11 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
+  function fmtDateShort(str) {
+    const d = new Date(str + 'T00:00:00');
+    return d.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' });
+  }
+
   // ---------- Goals form ----------
   function populateGoalsForm() {
     document.getElementById('goalStartDate').value = goals.startDate || '';
@@ -1059,26 +1064,38 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     container.innerHTML = svg;
   }
 
+  // Renders roughly a week's worth of bars per screen (fixed width per day) and lets
+  // the container's own horizontal scrolling reveal earlier days, instead of squeezing
+  // every day that's ever been logged into one cramped view.
   function drawBarChart(containerId, points, color, goalValue, opts) {
     const container = document.getElementById(containerId);
-    const width = Math.max(280, container.clientWidth || 600);
-    const height = 220;
-    const padL = 44, padR = 16, padT = 16, padB = 30;
-    const plotW = width - padL - padR;
-    const plotH = height - padT - padB;
 
     if (points.length === 0) {
       container.innerHTML = '<div class="no-data">No data yet.</div>';
+      container.dataset.rendered = '';
       return;
     }
 
+    const hadContent = container.dataset.rendered === '1';
+    const wasAtRightEdge = hadContent && (container.scrollLeft + container.clientWidth >= container.scrollWidth - 4);
+    const prevScrollLeft = container.scrollLeft;
+
+    const height = 220;
+    const padL = 44, padR = 16, padT = 26, padB = 30;
+    const plotH = height - padT - padB;
+
     const sorted = points.slice().sort((a, b) => a.x.localeCompare(b.x));
+    const slotWidth = 44;
+    const barW = 28;
+    const containerWidth = Math.max(280, container.clientWidth || 600);
+    const contentWidth = sorted.length * slotWidth;
+    const plotW = Math.max(containerWidth - padL - padR, contentWidth);
+    const width = plotW + padL + padR;
+
     let maxY = Math.max(...sorted.map(p => p.y), goalValue || 0) * 1.15;
     if (maxY === 0) maxY = 10;
 
     function yPix(val) { return padT + plotH - (val / maxY) * plotH; }
-
-    const barW = Math.min(28, plotW / sorted.length - 6);
 
     let svg = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`;
 
@@ -1097,23 +1114,29 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
 
     const clickable = opts && typeof opts.onBarClick === 'function';
     sorted.forEach((p, i) => {
-      const x = padL + (plotW / sorted.length) * i + ((plotW / sorted.length) - barW) / 2;
+      const slotX = padL + slotWidth * i;
+      const x = slotX + (slotWidth - barW) / 2;
       const y = yPix(p.y);
       const barH = padT + plotH - y;
       const selected = opts && opts.selectedDate === p.x;
       const stroke = selected ? ` stroke="${color}" stroke-width="2" stroke-opacity="0.9"` : '';
       const pad = selected ? 2 : 0;
       svg += `<rect data-date="${p.x}" x="${(x - pad).toFixed(1)}" y="${(y - pad).toFixed(1)}" width="${(barW + pad * 2).toFixed(1)}" height="${(barH + pad).toFixed(1)}" fill="${color}" rx="2"${stroke}${clickable ? ' style="cursor:pointer"' : ''}/>`;
+      svg += `<text x="${(slotX + slotWidth / 2).toFixed(1)}" y="${(y - 6).toFixed(1)}" font-size="10" font-weight="700" fill="${color}" text-anchor="middle">${p.y}</text>`;
     });
 
-    [sorted[0], sorted[sorted.length - 1]].forEach((p, idx) => {
-      const i = idx === 0 ? 0 : sorted.length - 1;
-      const x = padL + (plotW / sorted.length) * i + (plotW / sorted.length) / 2;
-      svg += `<text x="${x.toFixed(1)}" y="${height - 8}" font-size="10" fill="#6b7684" text-anchor="middle">${fmtDate(p.x)}</text>`;
+    sorted.forEach((p, i) => {
+      const slotX = padL + slotWidth * i;
+      svg += `<text x="${(slotX + slotWidth / 2).toFixed(1)}" y="${height - 8}" font-size="10" fill="#6b7684" text-anchor="middle">${fmtDateShort(p.x)}</text>`;
     });
 
     svg += '</svg>';
     container.innerHTML = svg;
+    container.dataset.rendered = '1';
+
+    // Default to showing the most recent days; if the user had scrolled back through
+    // history, leave them where they were instead of yanking them back to today.
+    container.scrollLeft = (!hadContent || wasAtRightEdge) ? container.scrollWidth : prevScrollLeft;
 
     if (clickable) {
       container.querySelectorAll('rect[data-date]').forEach(rect => {
