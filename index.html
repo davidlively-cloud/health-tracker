@@ -69,6 +69,10 @@
     max-width: 100%;
     min-width: 0;
   }
+  /* Date fields get their own full-width row instead of sharing one with another field —
+     native date controls (especially in Safari) have a hard minimum width that CSS can't
+     shrink, so squeezing one next to another field causes it to overflow its column. */
+  .field-full { grid-column: 1 / -1; }
   input:focus, select:focus { outline: 2px solid var(--accent-light); border-color: var(--accent); }
   .field { margin-bottom: 0; min-width: 0; }
   button {
@@ -152,8 +156,10 @@
   .goal-value { font-size: 28px; font-weight: 800; color: var(--metric-color); }
   .goal-edit { margin-top: 14px; }
   .timeline-percent-value { color: var(--accent); }
-  .timeline-ticks { display: flex; align-items: stretch; gap: 2px; height: 36px; }
-  .timeline-tick { flex: 1; min-width: 2px; background: #eef1f5; border-radius: 2px; }
+  .timeline-months { display: flex; flex-direction: column; gap: 12px; }
+  .timeline-month-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 4px; }
+  .timeline-ticks { display: flex; align-items: stretch; gap: 2px; height: 28px; width: 100%; }
+  .timeline-tick { flex: 1 1 0; min-width: 0; background: #eef1f5; border-radius: 2px; }
   .timeline-tick.filled { background: var(--accent); }
   .timeline-tick.today { background: var(--accent-light); }
   .timeline-dates { text-align: center; margin-top: 10px; }
@@ -204,11 +210,11 @@
     </div>
     <div class="goal-edit" id="timelineGoalEdit" style="display:none;">
       <div class="grid">
-        <div class="field">
+        <div class="field field-full">
           <label for="goalStartDate">Start date</label>
           <input type="date" id="goalStartDate">
         </div>
-        <div class="field">
+        <div class="field field-full">
           <label for="goalTargetDate">Goal date</label>
           <input type="date" id="goalTargetDate">
         </div>
@@ -251,7 +257,7 @@
     <div class="stat-grid" id="waterStat" style="margin-top:18px;"></div>
 
     <div class="grid" style="margin-top:18px;">
-      <div class="field">
+      <div class="field field-full">
         <label for="waterDate">Date</label>
         <input type="date" id="waterDate">
       </div>
@@ -301,7 +307,7 @@
     <div class="stat-grid" id="weightStat" style="margin-top:18px;"></div>
 
     <div class="grid" style="margin-top:18px;">
-      <div class="field">
+      <div class="field field-full">
         <label for="weightDate">Date</label>
         <input type="date" id="weightDate">
       </div>
@@ -352,7 +358,7 @@
     <div class="stat-grid" id="bpStat" style="margin-top:18px;"></div>
 
     <div class="grid" style="margin-top:18px;">
-      <div class="field">
+      <div class="field field-full">
         <label for="bpDate">Date</label>
         <input type="date" id="bpDate">
       </div>
@@ -749,6 +755,15 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     return Math.round((d2 - d1) / 86400000);
   }
 
+  // Pure calendar-date arithmetic (anchored to UTC internally) so this never shifts
+  // based on the browser's local timezone.
+  function addDays(dateStr, delta) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    dt.setUTCDate(dt.getUTCDate() + delta);
+    return dt.toISOString().slice(0, 10);
+  }
+
   function renderTimeline() {
     const el = document.getElementById('timelineStat');
     const percentEl = document.getElementById('timelinePercentValue');
@@ -767,23 +782,50 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
 
     percentEl.textContent = pct + '%';
 
-    // One tick per day, capped so extremely long timelines don't render thousands of nodes.
-    const totalForTicks = Math.max(total, 1);
-    const maxTicks = 120;
-    const tickCount = Math.min(totalForTicks, maxTicks);
-    let ticksHtml = '';
-    for (let i = 0; i < tickCount; i++) {
-      const dayIndex = Math.floor((i / tickCount) * totalForTicks);
-      let cls = 'timeline-tick';
-      if (dayIndex < elapsed) cls += ' filled';
-      else if (dayIndex === elapsed) cls += ' today';
-      ticksHtml += `<div class="${cls}"></div>`;
-    }
-
     el.innerHTML = `
-      <div class="timeline-ticks">${ticksHtml}</div>
+      <div class="timeline-months">${buildTimelineMonthsHtml(goals.startDate, goals.targetDate, today)}</div>
       <div class="timeline-dates hint">${fmtDate(goals.startDate)} → ${fmtDate(goals.targetDate)} · ${status}</div>
     `;
+  }
+
+  // Last calendar day of the month that `dateStr` falls in, as a YYYY-MM-DD string.
+  function lastDayOfMonthStr(dateStr) {
+    const [y, m] = dateStr.split('-').map(Number);
+    return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+  }
+
+  function monthLabel(dateStr) {
+    return new Date(dateStr + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+  }
+
+  // Renders one tick-mark row per calendar month spanned by the goal period, each
+  // labeled with its month, so long timelines wrap by month instead of one long row.
+  function buildTimelineMonthsHtml(startDate, targetDate, today) {
+    let html = '';
+    let monthStart = startDate;
+    while (monthStart <= targetDate) {
+      const monthEndActual = lastDayOfMonthStr(monthStart);
+      const monthEnd = monthEndActual < targetDate ? monthEndActual : targetDate;
+
+      let ticksHtml = '';
+      let d = monthStart;
+      while (d <= monthEnd) {
+        let cls = 'timeline-tick';
+        if (d < today) cls += ' filled';
+        else if (d === today) cls += ' today';
+        ticksHtml += `<div class="${cls}"></div>`;
+        d = addDays(d, 1);
+      }
+
+      html += `
+        <div class="timeline-month">
+          <div class="timeline-month-label">${monthLabel(monthStart)}</div>
+          <div class="timeline-ticks">${ticksHtml}</div>
+        </div>
+      `;
+      monthStart = addDays(monthEnd, 1);
+    }
+    return html;
   }
 
   function latestEntryOnOrBefore(field, dateStr) {
@@ -824,8 +866,9 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
       wrap.innerHTML = '<div class="hint">Set a start date and goal date (in Goal Timeline) to track days elapsed and days achieved.</div>';
       return;
     }
-    const today = todayStr();
-    const endBound = today < goals.targetDate ? today : goals.targetDate;
+    // Only count fully completed days — today doesn't count until it's over.
+    const yesterday = addDays(todayStr(), -1);
+    const endBound = yesterday < goals.targetDate ? yesterday : goals.targetDate;
     const daysElapsed = Math.max(0, daysBetween(goals.startDate, endBound) + 1);
 
     let achievedValue;
