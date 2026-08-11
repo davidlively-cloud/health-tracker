@@ -168,6 +168,7 @@
   .timeline-percent-value { color: var(--accent); }
   .timeline-months { display: flex; flex-direction: column; gap: 12px; }
   .timeline-month-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 4px; }
+  .timeline-month-days { text-transform: none; letter-spacing: normal; }
   .timeline-ticks { display: flex; align-items: stretch; gap: 2px; height: 28px; width: 100%; }
   .timeline-tick { flex: 1 1 0; min-width: 0; background: #eef1f5; border-radius: 2px; }
   .timeline-tick.filled { background: var(--accent); }
@@ -867,10 +868,13 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
       const monthEnd = monthEndActual < targetDate ? monthEndActual : targetDate;
 
       let ticksHtml = '';
+      let dayCount = 0;
+      let completedCount = 0;
       let d = monthStart;
       while (d <= monthEnd) {
+        dayCount++;
         let cls = 'timeline-tick';
-        if (d < today) cls += ' filled';
+        if (d < today) { cls += ' filled'; completedCount++; }
         else if (d === today) cls += ' today';
         ticksHtml += `<div class="${cls}"></div>`;
         d = addDays(d, 1);
@@ -878,7 +882,7 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
 
       html += `
         <div class="timeline-month">
-          <div class="timeline-month-label">${monthLabel(monthStart)}</div>
+          <div class="timeline-month-label">${monthLabel(monthStart)} - <span class="timeline-month-days">${completedCount} of ${dayCount} day${dayCount === 1 ? '' : 's'}</span></div>
           <div class="timeline-ticks">${ticksHtml}</div>
         </div>
       `;
