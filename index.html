@@ -71,6 +71,12 @@
     /* Native date controls ignore width in some browsers unless max-width is set explicitly. */
     max-width: 100%;
     min-width: 0;
+    /* No visible border/box — the native control's own sizing quirks are much less
+       noticeable as plain text+icon than as a bordered field that doesn't quite match
+       the width of the boxed fields next to it. */
+    border: none;
+    background: transparent;
+    padding-left: 0;
   }
   /* Date fields get their own full-width row instead of sharing one with another field —
      native date controls (especially in Safari) have a hard minimum width that CSS can't
