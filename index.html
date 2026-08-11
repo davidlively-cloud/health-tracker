@@ -279,8 +279,6 @@
 
     <div class="stat-grid" id="waterProgressStat" style="margin-top:18px;"></div>
 
-    <div class="stat-grid" id="waterStat" style="margin-top:18px;"></div>
-
     <div class="grid" style="margin-top:18px;">
       <div class="field field-full">
         <label for="waterDate">Date</label>
@@ -908,22 +906,25 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     document.getElementById('bpStat').innerHTML = statBlock('Current Blood Pressure',
       bpValueHtml(latestBpSys ? latestBpSys.systolic : null, latestBpDia ? latestBpDia.diastolic : null),
       bpDelta(latestBpSys, latestBpDia, goals.systolic, goals.diastolic));
-
-    const todayWater = entries.find(e => e.date === today && e.water !== null && e.water !== undefined);
-    document.getElementById('waterStat').innerHTML = statBlock("Today's Water",
-      todayWater ? todayWater.water + ' oz' : '0 oz',
-      goals.water ? waterDelta(todayWater ? todayWater.water : 0, goals.water) : '');
   }
 
-  // Counts days elapsed in the goal timeline and how many of those days hit the water goal.
+  // Today's Water sits alongside Goal Achieved in the same stat row (where Days
+  // Elapsed used to be); it doesn't depend on a goal timeline being set.
   function renderWaterProgress() {
     const wrap = document.getElementById('waterProgressStat');
+    const today = todayStr();
+    const todayWater = entries.find(e => e.date === today && e.water !== null && e.water !== undefined);
+    const todayStatHtml = statBlock("Today's Water",
+      todayWater ? todayWater.water + ' oz' : '0 oz',
+      goals.water ? waterDelta(todayWater ? todayWater.water : 0, goals.water) : '');
+
     if (!goals.startDate || !goals.targetDate) {
-      wrap.innerHTML = '<div class="hint">Set a start date and goal date (in Goal Timeline) to track days elapsed and days achieved.</div>';
+      wrap.innerHTML = todayStatHtml + statBlock('Goal Achieved', 'Set a goal timeline to track', '');
       return;
     }
+
     // Only count fully completed days — today doesn't count until it's over.
-    const yesterday = addDays(todayStr(), -1);
+    const yesterday = addDays(today, -1);
     const endBound = yesterday < goals.targetDate ? yesterday : goals.targetDate;
     const daysElapsed = Math.max(0, daysBetween(goals.startDate, endBound) + 1);
 
@@ -941,10 +942,7 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
       }
     }
 
-    let html = '';
-    html += statBlock('Days Elapsed', daysElapsed + ' day' + (daysElapsed === 1 ? '' : 's'), '');
-    html += statBlock('Goal Achieved', achievedValue, achievedDelta);
-    wrap.innerHTML = html;
+    wrap.innerHTML = todayStatHtml + statBlock('Goal Achieved', achievedValue, achievedDelta);
   }
 
   function bpValueHtml(systolic, diastolic) {
