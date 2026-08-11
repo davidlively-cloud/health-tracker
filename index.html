@@ -29,10 +29,11 @@
     color: var(--text);
     padding: 24px;
   }
-  h1 { font-size: 22px; margin: 0 0 4px; }
+  h1 { font-size: 22px; margin: 0; }
   h2 { font-size: 16px; margin: 0 0 14px; }
-  .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
   .container { max-width: 980px; margin: 0 auto; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+  .heading-edit { margin-bottom: 18px; }
   .card {
     background: var(--card);
     border: 1px solid var(--border);
@@ -203,7 +204,23 @@
 </head>
 <body>
 <div class="container">
-  <h1>David's Health Tracker</h1>
+  <div class="page-header">
+    <h1 id="appHeading">David's Health Tracker</h1>
+    <button class="secondary small" id="editHeadingBtn">Edit Name</button>
+  </div>
+  <div class="heading-edit" id="headingEdit" style="display:none;">
+    <div class="grid">
+      <div class="field">
+        <label for="appNameInput">App heading</label>
+        <input type="text" id="appNameInput" placeholder="e.g. Sarah's Health Tracker">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="small" id="saveHeadingBtn">Save</button>
+      <button class="secondary small" id="cancelHeadingBtn">Cancel</button>
+    </div>
+    <div class="hint">This is saved with your sync code, so each person using their own code sees their own heading.</div>
+  </div>
 
   <!-- TIMELINE -->
   <div class="card" id="timelineCard">
@@ -470,10 +487,13 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
   const GOALS_KEY = 'healthTracker.goals';
   const ENTRIES_KEY = 'healthTracker.entries';
   const WATER_LOG_KEY = 'healthTracker.waterLog';
+  const APP_NAME_KEY = 'healthTracker.appName';
+  const DEFAULT_APP_NAME = "David's Health Tracker";
 
   let goals = loadGoals();
   let entries = loadEntries();
   let waterLog = loadWaterLog();
+  let appName = loadAppName();
   let openWaterDetailDate = null;
 
   function loadGoals() {
@@ -491,9 +511,21 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
       return JSON.parse(localStorage.getItem(WATER_LOG_KEY)) || [];
     } catch (e) { return []; }
   }
+  function loadAppName() {
+    return localStorage.getItem(APP_NAME_KEY) || null;
+  }
   function saveGoalsToStorage() { localStorage.setItem(GOALS_KEY, JSON.stringify(goals)); pushToCloud(); }
   function saveEntriesToStorage() { localStorage.setItem(ENTRIES_KEY, JSON.stringify(entries)); pushToCloud(); }
   function saveWaterLogToStorage() { localStorage.setItem(WATER_LOG_KEY, JSON.stringify(waterLog)); pushToCloud(); }
+  function saveAppNameToStorage() {
+    if (appName) localStorage.setItem(APP_NAME_KEY, appName);
+    else localStorage.removeItem(APP_NAME_KEY);
+    pushToCloud();
+  }
+
+  function renderHeading() {
+    document.getElementById('appHeading').textContent = appName || DEFAULT_APP_NAME;
+  }
 
   // Pinned to US Eastern Time (rather than the device's local zone or raw UTC) so the
   // "current day" — and when it rolls over — stays consistent across devices/timezones.
@@ -539,6 +571,22 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
       targetDate: document.getElementById('goalTargetDate').value || null,
     });
     hideGoalEdit('timeline');
+  });
+
+  // ---------- App heading (saved per sync code, so each user can name their own copy) ----------
+  document.getElementById('editHeadingBtn').addEventListener('click', function () {
+    document.getElementById('appNameInput').value = appName || '';
+    document.getElementById('headingEdit').style.display = 'block';
+  });
+  document.getElementById('cancelHeadingBtn').addEventListener('click', function () {
+    document.getElementById('headingEdit').style.display = 'none';
+  });
+  document.getElementById('saveHeadingBtn').addEventListener('click', function () {
+    const val = document.getElementById('appNameInput').value.trim();
+    appName = val || null;
+    saveAppNameToStorage();
+    renderHeading();
+    document.getElementById('headingEdit').style.display = 'none';
   });
 
   // Each metric's goal (and the timeline dates) is shown as large bold text;
@@ -1131,7 +1179,7 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
 
   // ---------- Export / Import ----------
   document.getElementById('exportBtn').addEventListener('click', function () {
-    const data = { goals, entries, waterLog };
+    const data = { goals, entries, waterLog, appName };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1151,9 +1199,11 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
         if (data.goals) goals = data.goals;
         if (Array.isArray(data.entries)) entries = data.entries;
         if (Array.isArray(data.waterLog)) waterLog = data.waterLog;
+        if (typeof data.appName === 'string') appName = data.appName;
         saveGoalsToStorage();
         saveEntriesToStorage();
         saveWaterLogToStorage();
+        saveAppNameToStorage();
         populateGoalsForm();
         renderAll();
         alert('Import complete.');
@@ -1216,7 +1266,7 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     if (!FIREBASE_CONFIGURED || !syncCode) return;
     try {
       await authReady;
-      await setDoc(syncDocRef(syncCode), { goals, entries, waterLog, updatedAt: serverTimestamp() });
+      await setDoc(syncDocRef(syncCode), { goals, entries, waterLog, appName, updatedAt: serverTimestamp() });
     } catch (e) {
       console.error('Cloud sync write failed', e);
     }
@@ -1226,9 +1276,12 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     if (data.goals) goals = data.goals;
     if (Array.isArray(data.entries)) entries = data.entries;
     if (Array.isArray(data.waterLog)) waterLog = data.waterLog;
+    if (typeof data.appName === 'string' || data.appName === null) appName = data.appName || null;
     localStorage.setItem(GOALS_KEY, JSON.stringify(goals));
     localStorage.setItem(ENTRIES_KEY, JSON.stringify(entries));
     localStorage.setItem(WATER_LOG_KEY, JSON.stringify(waterLog));
+    if (appName) localStorage.setItem(APP_NAME_KEY, appName);
+    else localStorage.removeItem(APP_NAME_KEY);
     openWaterDetailDate = null;
     document.getElementById('waterDayDetail').style.display = 'none';
     populateGoalsForm();
@@ -1240,8 +1293,8 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     unsubscribeSnapshot = onSnapshot(syncDocRef(code), (snap) => {
       if (!snap.exists()) return;
       const data = snap.data();
-      const localJson = JSON.stringify({ goals, entries, waterLog });
-      const remoteJson = JSON.stringify({ goals: data.goals || {}, entries: data.entries || [], waterLog: data.waterLog || [] });
+      const localJson = JSON.stringify({ goals, entries, waterLog, appName });
+      const remoteJson = JSON.stringify({ goals: data.goals || {}, entries: data.entries || [], waterLog: data.waterLog || [], appName: data.appName || null });
       if (localJson !== remoteJson) applyRemoteData(data);
     }, (e) => console.error('Live sync listener error', e));
   }
@@ -1249,7 +1302,7 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
   async function connectWithCode(code, isNew) {
     await authReady;
     if (isNew) {
-      await setDoc(syncDocRef(code), { goals, entries, waterLog, updatedAt: serverTimestamp() });
+      await setDoc(syncDocRef(code), { goals, entries, waterLog, appName, updatedAt: serverTimestamp() });
     } else {
       const snap = await getDoc(syncDocRef(code));
       const data = snap.exists() ? snap.data() : null;
@@ -1262,11 +1315,11 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
           `Cancel = keep what's shown here and overwrite the synced data with it instead.`
         );
         if (useRemote) applyRemoteData(data);
-        else await setDoc(syncDocRef(code), { goals, entries, waterLog, updatedAt: serverTimestamp() });
+        else await setDoc(syncDocRef(code), { goals, entries, waterLog, appName, updatedAt: serverTimestamp() });
       } else if (remoteHasData) {
         applyRemoteData(data);
       } else {
-        await setDoc(syncDocRef(code), { goals, entries, waterLog, updatedAt: serverTimestamp() });
+        await setDoc(syncDocRef(code), { goals, entries, waterLog, appName, updatedAt: serverTimestamp() });
       }
     }
     syncCode = code;
@@ -1303,6 +1356,7 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
 
   // ---------- Render all ----------
   function renderAll() {
+    renderHeading();
     renderTimeline();
     renderGoalDisplays();
     renderStats();
