@@ -54,6 +54,7 @@
   }
   input, select {
     width: 100%;
+    max-width: 100%;
     min-width: 0;
     padding: 8px 10px;
     border: 1px solid var(--border);
@@ -61,6 +62,12 @@
     font-size: 16px;
     background: #fff;
     color: var(--text);
+    box-sizing: border-box;
+  }
+  input[type="date"] {
+    /* Native date controls ignore width in some browsers unless max-width is set explicitly. */
+    max-width: 100%;
+    min-width: 0;
   }
   input:focus, select:focus { outline: 2px solid var(--accent-light); border-color: var(--accent); }
   .field { margin-bottom: 0; min-width: 0; }
@@ -474,9 +481,14 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
   function saveEntriesToStorage() { localStorage.setItem(ENTRIES_KEY, JSON.stringify(entries)); pushToCloud(); }
   function saveWaterLogToStorage() { localStorage.setItem(WATER_LOG_KEY, JSON.stringify(waterLog)); pushToCloud(); }
 
+  // Pinned to US Eastern Time (rather than the device's local zone or raw UTC) so the
+  // "current day" — and when it rolls over — stays consistent across devices/timezones.
+  const APP_TIMEZONE = 'America/New_York';
+
   function todayStr() {
-    const d = new Date();
-    return d.toISOString().slice(0, 10);
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: APP_TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit'
+    }).format(new Date());
   }
 
   function fmtDate(str) {
@@ -1050,7 +1062,7 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     const wrap = document.getElementById('waterDayDetail');
     const dayEntries = waterLog.filter(w => w.date === date).sort((a, b) => a.time.localeCompare(b.time));
     const rows = dayEntries.length
-      ? dayEntries.map(w => `<div class="day-detail-row"><span>${new Date(w.time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span><span>${w.amount} oz</span></div>`).join('')
+      ? dayEntries.map(w => `<div class="day-detail-row"><span>${new Date(w.time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: APP_TIMEZONE })}</span><span>${w.amount} oz</span></div>`).join('')
       : '<div class="day-detail-empty">No individual entries recorded for this day.</div>';
     wrap.innerHTML = `
       <div class="day-detail-title">
