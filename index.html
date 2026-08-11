@@ -42,8 +42,11 @@
   }
   .card-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
   .grid {
+    /* Always a single full-width column — native date inputs (especially on iOS Safari)
+       don't reliably shrink to share a row with another field, so every field just gets
+       its own row instead, guaranteeing all fields are always the same width. */
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    grid-template-columns: 1fr;
     gap: 12px;
   }
   label {
@@ -188,7 +191,6 @@
   @media (max-width: 480px) {
     body { padding: 12px; }
     .card { padding: 14px 16px; }
-    .grid { grid-template-columns: 1fr; }
     h1 { font-size: 19px; }
   }
 </style>
@@ -871,20 +873,23 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     const endBound = yesterday < goals.targetDate ? yesterday : goals.targetDate;
     const daysElapsed = Math.max(0, daysBetween(goals.startDate, endBound) + 1);
 
-    let achievedValue;
+    let achievedValue = 'Set a water goal to track';
+    let achievedDelta = '';
     if (goals.water !== null && goals.water !== undefined) {
       const achievedCount = entries.filter(e =>
         e.date >= goals.startDate && e.date <= endBound &&
         e.water !== null && e.water !== undefined && e.water >= goals.water
       ).length;
       achievedValue = `${achievedCount} of ${daysElapsed} day${daysElapsed === 1 ? '' : 's'}`;
-    } else {
-      achievedValue = 'Set a water goal to track';
+      if (daysElapsed > 0) {
+        const achievedPct = Math.round((achievedCount / daysElapsed) * 100);
+        achievedDelta = `<span>${achievedPct}% success rate</span>`;
+      }
     }
 
     let html = '';
     html += statBlock('Days Elapsed', daysElapsed + ' day' + (daysElapsed === 1 ? '' : 's'), '');
-    html += statBlock('Goal Achieved', achievedValue, '');
+    html += statBlock('Goal Achieved', achievedValue, achievedDelta);
     wrap.innerHTML = html;
   }
 
