@@ -111,13 +111,14 @@
     font-size: 12px;
   }
   .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
-  #tableWrap { overflow-x: auto; }
+  #tableWrap { overflow-x: auto; overflow-y: auto; }
   table {
     width: 100%;
     min-width: 480px;
     border-collapse: collapse;
     font-size: 13px;
   }
+  thead th { position: sticky; top: 0; background: var(--card); }
   th, td {
     text-align: left;
     padding: 8px 6px;
@@ -786,9 +787,12 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
       `<button class="clear-x" data-clear data-id="${entry.id}" data-metric="${metric}" title="Clear this value">✕</button>`;
   }
 
+  const TABLE_VISIBLE_ROWS = 3;
+
   function renderTable() {
     const wrap = document.getElementById('tableWrap');
     if (entries.length === 0) {
+      wrap.style.maxHeight = '';
       wrap.innerHTML = '<div class="empty-state">No entries yet. Log your first metric above.</div>';
       return;
     }
@@ -810,6 +814,18 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     wrap.querySelectorAll('[data-editcell]').forEach(el => el.addEventListener('click', () => editMetric(el.dataset.id, el.dataset.metric)));
     wrap.querySelectorAll('[data-clear]').forEach(el => el.addEventListener('click', () => clearMetric(el.dataset.id, el.dataset.metric)));
     wrap.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', () => deleteEntry(btn.dataset.del)));
+
+    // Cap the visible height to the header plus a few rows and let the rest scroll,
+    // measuring actual rendered row heights rather than guessing a fixed pixel value.
+    const bodyRows = wrap.querySelectorAll('tbody tr');
+    if (bodyRows.length > TABLE_VISIBLE_ROWS) {
+      const headerRow = wrap.querySelector('thead tr');
+      let height = headerRow.getBoundingClientRect().height;
+      for (let i = 0; i < TABLE_VISIBLE_ROWS; i++) height += bodyRows[i].getBoundingClientRect().height;
+      wrap.style.maxHeight = Math.ceil(height) + 'px';
+    } else {
+      wrap.style.maxHeight = '';
+    }
   }
 
   // ---------- Timeline / stats ----------
