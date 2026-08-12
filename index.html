@@ -152,6 +152,7 @@
   .actions-cell { white-space: nowrap; }
   .no-data { text-align: center; color: var(--muted); padding: 40px 0; font-size: 13px; }
   .hint { font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .timeline-percent-row { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
   footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 30px; }
   .metric-card { border-left: 5px solid var(--metric-color, var(--accent)); }
   .metric-weight { --metric-color: var(--weight-color); }
@@ -230,7 +231,10 @@
     <div class="goal-row" id="timelineGoalRow">
       <div>
         <div class="goal-label">Time Elapsed</div>
-        <div class="goal-value timeline-percent-value" id="timelinePercentValue">Not set</div>
+        <div class="timeline-percent-row">
+          <span class="goal-value timeline-percent-value" id="timelinePercentValue">Not set</span>
+          <span class="goal-value timeline-percent-value" id="timelineDaysSummary"></span>
+        </div>
       </div>
       <button class="secondary small" id="editTimelineBtn">Edit Dates</button>
     </div>
@@ -827,8 +831,10 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
   function renderTimeline() {
     const el = document.getElementById('timelineStat');
     const percentEl = document.getElementById('timelinePercentValue');
+    const daysSummaryEl = document.getElementById('timelineDaysSummary');
     if (!goals.startDate || !goals.targetDate) {
       percentEl.textContent = 'Not set';
+      daysSummaryEl.textContent = '';
       el.innerHTML = '<div class="hint">Set a start date and goal date to see your timeline progress.</div>';
       return;
     }
@@ -841,6 +847,10 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     const status = remaining === 0 ? 'Goal date reached' : `${remaining} day${remaining === 1 ? '' : 's'} remaining`;
 
     percentEl.textContent = pct + '%';
+    // Unlike the tick marks/month counts (which don't count today until it's over), this
+    // reads as "Day N of Total" — today counts as the current day of the plan.
+    const dayNumber = Math.min(elapsed + 1, total);
+    daysSummaryEl.textContent = `Day ${dayNumber} of ${total}`;
 
     el.innerHTML = `
       <div class="timeline-months">${buildTimelineMonthsHtml(goals.startDate, goals.targetDate, today)}</div>
@@ -906,9 +916,11 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
 
     const latestWeightEntry = latestEntryOnOrBefore('weight', today) || firstEntryWithField('weight');
     const firstWeightEntry = firstEntryWithField('weight');
-    document.getElementById('weightStat').innerHTML = statBlock('Current Weight',
-      latestWeightEntry ? latestWeightEntry.weight + ' lbs' : '—',
-      weightDelta(firstWeightEntry, latestWeightEntry, goals.weight));
+    document.getElementById('weightStat').innerHTML =
+      statBlock('Current Weight',
+        latestWeightEntry ? latestWeightEntry.weight + ' lbs' : '—',
+        weightDelta(latestWeightEntry, goals.weight)) +
+      weightLostBlock(firstWeightEntry, latestWeightEntry);
 
     const latestBpSys = latestEntryOnOrBefore('systolic', today) || firstEntryWithField('systolic');
     const latestBpDia = latestEntryOnOrBefore('diastolic', today) || firstEntryWithField('diastolic');
@@ -967,12 +979,26 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     </div>`;
   }
 
-  function weightDelta(first, latest, goalWeight) {
+  function weightDelta(latest, goalWeight) {
     if (!latest || goalWeight === null || goalWeight === undefined) return '';
     const remaining = (latest.weight - goalWeight);
-    const dir = remaining > 0 ? 'to lose' : remaining < 0 ? 'to gain' : '';
     if (Math.abs(remaining) < 0.05) return `<span class="delta pos">Goal reached 🎉</span>`;
-    return `<span>${Math.abs(remaining).toFixed(1)} lbs ${dir} (goal ${goalWeight} lbs)</span>`;
+    const dir = remaining > 0 ? 'to lose' : 'to gain';
+    return `<span>${Math.abs(remaining).toFixed(1)} lbs ${dir}</span>`;
+  }
+
+  // Net change from the first logged weight to the most recent one.
+  function weightLostBlock(first, latest) {
+    if (!first || !latest || first.id === latest.id) {
+      return statBlock('Weight Lost', '—', 'Log another weigh-in to track');
+    }
+    const lost = first.weight - latest.weight;
+    const value = Math.abs(lost).toFixed(1) + ' lbs';
+    let delta;
+    if (lost > 0.05) delta = `<span class="delta pos">lost since ${fmtDate(first.date)}</span>`;
+    else if (lost < -0.05) delta = `<span>gained since ${fmtDate(first.date)}</span>`;
+    else delta = `<span>no change since ${fmtDate(first.date)}</span>`;
+    return statBlock('Weight Lost', value, delta);
   }
 
   function bpDelta(sysE, diaE, goalSys, goalDia) {
