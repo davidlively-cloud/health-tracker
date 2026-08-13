@@ -198,6 +198,26 @@
   .input-dia { border-color: var(--dia-color); }
   .bp-value-sys { color: var(--sys-color); }
   .bp-value-dia { color: var(--dia-color); }
+  .confetti-container {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 9999;
+  }
+  .confetti-piece {
+    position: absolute;
+    top: -20px;
+    border-radius: 2px;
+    opacity: 0.95;
+    animation-name: confetti-fall;
+    animation-timing-function: cubic-bezier(0.35, 0, 0.65, 1);
+    animation-fill-mode: forwards;
+  }
+  @keyframes confetti-fall {
+    0% { transform: translate(0, 0) rotate(var(--rotate-start, 0deg)); opacity: 1; }
+    100% { transform: translate(var(--drift, 0px), 105vh) rotate(calc(var(--rotate-start, 0deg) + 540deg)); opacity: 0.4; }
+  }
   @media (max-width: 480px) {
     body { padding: 12px; }
     .card { padding: 14px 16px; }
@@ -708,12 +728,47 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     if (amount === null) { alert('Enter a water amount.'); return; }
     const existing = entries.find(e => e.date === date);
     const runningTotal = (existing && existing.water !== null && existing.water !== undefined) ? existing.water : 0;
-    upsertEntry(date, { water: runningTotal + amount });
+    const newTotal = runningTotal + amount;
+    upsertEntry(date, { water: newTotal });
     waterLog.push({ id: cryptoId(), date, time: new Date().toISOString(), amount });
     saveWaterLogToStorage();
     document.getElementById('waterValue').value = '';
     if (openWaterDetailDate === date) renderWaterDayDetail(date);
+
+    // Celebrate the moment today's total actually crosses the goal — not on every
+    // add afterward, and not for backfilled past dates.
+    const goalWater = goals.water;
+    if (date === todayStr() && goalWater !== null && goalWater !== undefined &&
+        runningTotal < goalWater && newTotal >= goalWater) {
+      celebrateWaterGoal();
+    }
   });
+
+  // ---------- Confetti celebration ----------
+  function celebrateWaterGoal() {
+    const colors = ['#0891b2', '#166534', '#dc2626', '#1d4ed8', '#f59e0b', '#db2777'];
+    const container = document.createElement('div');
+    container.className = 'confetti-container';
+    const pieceCount = 130;
+    for (let i = 0; i < pieceCount; i++) {
+      const piece = document.createElement('div');
+      piece.className = 'confetti-piece';
+      const size = 6 + Math.random() * 6;
+      const rotateStart = Math.random() * 360;
+      const drift = Math.round((Math.random() - 0.5) * 220);
+      piece.style.left = (Math.random() * 100) + 'vw';
+      piece.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+      piece.style.width = size + 'px';
+      piece.style.height = (size * 0.4) + 'px';
+      piece.style.animationDelay = (Math.random() * 0.4) + 's';
+      piece.style.animationDuration = (2.2 + Math.random() * 1.2) + 's';
+      piece.style.setProperty('--rotate-start', rotateStart + 'deg');
+      piece.style.setProperty('--drift', drift + 'px');
+      container.appendChild(piece);
+    }
+    document.body.appendChild(container);
+    setTimeout(() => container.remove(), 3800);
+  }
 
   function scrollToId(id) {
     const el = document.getElementById(id);
