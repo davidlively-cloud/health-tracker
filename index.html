@@ -17,6 +17,7 @@
     --sys-color: #dc2626;
     --dia-color: #1d4ed8;
     --water-color: #0891b2;
+    --timeline-color: #4b5563;
     --goal-color: #9ca3af;
     --good: #16a34a;
     --radius: 10px;
@@ -163,7 +164,11 @@
   .metric-weight { --metric-color: var(--weight-color); }
   .metric-bp { --metric-color: var(--sys-color); }
   .metric-water { --metric-color: var(--water-color); }
-  .metric-card h2 { color: var(--metric-color); }
+  #timelineCard { border-left: 5px solid var(--timeline-color); }
+  #timelineCard h2 { font-size: 18px; }
+  .metric-card h2 { color: var(--metric-color); font-size: 18px; }
+  .heading-action { display: flex; align-items: center; gap: 12px; }
+  .heading-divider { width: 1px; align-self: stretch; min-height: 20px; background: var(--border); }
   .btn-metric { background: var(--metric-color); }
   .metric-card .stat { background: color-mix(in srgb, var(--metric-color) 6%, white); border-color: color-mix(in srgb, var(--metric-color) 22%, var(--border)); }
   .metric-card .stat .value { color: var(--metric-color); }
@@ -189,13 +194,24 @@
   .day-detail-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; border-bottom: 1px solid var(--border); }
   .day-detail-row:last-child { border-bottom: none; }
   .day-detail-empty { font-size: 13px; color: var(--muted); }
-  /* Blood pressure section: systolic red, diastolic blue, shown as a two-tone border and per-field coloring */
+  /* Blood pressure section: systolic red, diastolic blue, shown as a two-tone accent bar
+     and per-field coloring. A pseudo-element (rather than border-image) is used for the
+     gradient bar because border-image ignores border-radius and squares off the corners. */
   .metric-bp {
-    border-image: linear-gradient(180deg, var(--sys-color), var(--dia-color)) 1;
-    border-image-slice: 1;
-    border-image-width: 0 0 0 5px;
+    border-left: none;
+    position: relative;
+    overflow: hidden;
   }
-  .metric-bp h2 { color: var(--text); }
+  .metric-bp::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 5px;
+    background: linear-gradient(180deg, var(--sys-color), var(--dia-color));
+  }
+  .metric-bp h2 { color: var(--sys-color); }
   .label-sys { color: var(--sys-color); }
   .label-dia { color: var(--dia-color); }
   .input-sys { border-color: var(--sys-color); }
@@ -251,7 +267,13 @@
 
   <!-- TIMELINE -->
   <div class="card" id="timelineCard">
-    <div class="card-row"><h2 style="margin:0;">Goal Timeline</h2></div>
+    <div class="card-row">
+      <h2 style="margin:0;">Goal Timeline</h2>
+      <div class="heading-action">
+        <span class="heading-divider"></span>
+        <button class="secondary small" id="editTimelineBtn">Edit Dates</button>
+      </div>
+    </div>
 
     <div class="goal-row" id="timelineGoalRow">
       <div>
@@ -261,7 +283,6 @@
           <span class="goal-value timeline-percent-value" id="timelineDaysSummary"></span>
         </div>
       </div>
-      <button class="secondary small" id="editTimelineBtn">Edit Dates</button>
     </div>
     <div class="goal-edit" id="timelineGoalEdit" style="display:none;">
       <div class="grid">
@@ -285,14 +306,19 @@
 
   <!-- WATER -->
   <div class="card metric-card metric-water" id="waterCard">
-    <div class="card-row"><h2 style="margin:0;">Water</h2></div>
+    <div class="card-row">
+      <h2 style="margin:0;">Water</h2>
+      <div class="heading-action">
+        <span class="heading-divider"></span>
+        <button class="secondary small" id="editGoalWaterBtn">Edit Goal</button>
+      </div>
+    </div>
 
     <div class="goal-row" id="waterGoalRow">
       <div>
         <div class="goal-label">Goal Water</div>
         <div class="goal-value" id="waterGoalValue">Not set</div>
       </div>
-      <button class="secondary small" id="editGoalWaterBtn">Edit Goal</button>
     </div>
     <div class="goal-edit" id="waterGoalEdit" style="display:none;">
       <div class="grid">
@@ -335,14 +361,19 @@
 
   <!-- WEIGHT -->
   <div class="card metric-card metric-weight" id="weightCard">
-    <div class="card-row"><h2 style="margin:0;">Weight</h2></div>
+    <div class="card-row">
+      <h2 style="margin:0;">Weight</h2>
+      <div class="heading-action">
+        <span class="heading-divider"></span>
+        <button class="secondary small" id="editGoalWeightBtn">Edit Goal</button>
+      </div>
+    </div>
 
     <div class="goal-row" id="weightGoalRow">
       <div>
         <div class="goal-label">Goal Weight</div>
         <div class="goal-value" id="weightGoalValue">Not set</div>
       </div>
-      <button class="secondary small" id="editGoalWeightBtn">Edit Goal</button>
     </div>
     <div class="goal-edit" id="weightGoalEdit" style="display:none;">
       <div class="grid">
@@ -382,7 +413,13 @@
 
   <!-- BLOOD PRESSURE -->
   <div class="card metric-card metric-bp" id="bpCard">
-    <div class="card-row"><h2 style="margin:0;">Blood Pressure</h2></div>
+    <div class="card-row">
+      <h2 style="margin:0;">Blood Pressure</h2>
+      <div class="heading-action">
+        <span class="heading-divider"></span>
+        <button class="secondary small" id="editAgeBtn">Edit Birthday</button>
+      </div>
+    </div>
 
     <div class="goal-row" id="bpGoalRow">
       <div>
@@ -393,7 +430,6 @@
           <span class="hint bp-age-value" id="ageValue"></span>
         </div>
       </div>
-      <button class="secondary small" id="editAgeBtn">Edit Birthday</button>
     </div>
     <div class="goal-edit" id="bpGoalEdit" style="display:none;">
       <div class="grid">
