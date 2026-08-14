@@ -144,6 +144,7 @@
   .stat .delta { font-size: 12px; margin-top: 2px; }
   .delta.pos { color: var(--good); }
   .delta.neg { color: #b91c1c; }
+  .delta.warn { color: #b45309; }
   .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
   .legend span { display: inline-flex; align-items: center; gap: 5px; }
   .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
@@ -154,6 +155,9 @@
   .no-data { text-align: center; color: var(--muted); padding: 40px 0; font-size: 13px; }
   .hint { font-size: 12px; color: var(--muted); margin-top: 10px; }
   .timeline-percent-row { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  .bp-target-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .bp-target-divider { width: 1px; align-self: stretch; min-height: 22px; background: var(--border); }
+  .bp-age-value { margin-top: 0; font-size: 26px; font-weight: 700; }
   footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 30px; }
   .metric-card { border-left: 5px solid var(--metric-color, var(--accent)); }
   .metric-weight { --metric-color: var(--weight-color); }
@@ -382,29 +386,32 @@
 
     <div class="goal-row" id="bpGoalRow">
       <div>
-        <div class="goal-label">Goal Blood Pressure</div>
-        <div class="goal-value" id="bpGoalValue">Not set</div>
+        <div class="goal-label">Healthy Blood Pressure Target (by age)</div>
+        <div class="bp-target-row">
+          <span class="goal-value" id="bpGoalValue">Not set</span>
+          <span class="bp-target-divider" id="bpAgeDivider"></span>
+          <span class="hint bp-age-value" id="ageValue"></span>
+        </div>
       </div>
-      <button class="secondary small" id="editGoalBpBtn">Edit Goal</button>
+      <button class="secondary small" id="editAgeBtn">Edit Birthday</button>
     </div>
     <div class="goal-edit" id="bpGoalEdit" style="display:none;">
       <div class="grid">
-        <div class="field">
-          <label for="goalSystolic" class="label-sys">Goal systolic</label>
-          <input type="number" step="1" id="goalSystolic" class="input-sys" placeholder="e.g. 120">
-        </div>
-        <div class="field">
-          <label for="goalDiastolic" class="label-dia">Goal diastolic</label>
-          <input type="number" step="1" id="goalDiastolic" class="input-dia" placeholder="e.g. 80">
+        <div class="field field-full">
+          <label for="goalBirthdate">Birthday</label>
+          <input type="date" id="goalBirthdate">
         </div>
       </div>
       <div class="btn-row">
-        <button class="btn-metric small" id="saveGoalBp">Save Goal</button>
-        <button class="secondary small" id="cancelGoalBpBtn">Cancel</button>
+        <button class="btn-metric small" id="saveAgeBtn">Save</button>
+        <button class="secondary small" id="cancelAgeBtn">Cancel</button>
       </div>
     </div>
 
     <div class="stat-grid" id="bpStat" style="margin-top:18px;"></div>
+
+    <div class="stat-grid" id="bpAnalysisStat" style="margin-top:18px;"></div>
+    <div class="hint">Healthy target and hypertension level are general reference based on common clinical guidelines (AHA categories; ACC/AHA age-adjusted goal for 65+) — not personalized medical advice. Talk to your doctor about your own target.</div>
 
     <div class="grid" style="margin-top:18px;">
       <div class="field field-full">
@@ -577,9 +584,43 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     document.getElementById('goalStartDate').value = goals.startDate || '';
     document.getElementById('goalTargetDate').value = goals.targetDate || '';
     document.getElementById('goalWeight').value = goals.weight ?? '';
-    document.getElementById('goalSystolic').value = goals.systolic ?? '';
-    document.getElementById('goalDiastolic').value = goals.diastolic ?? '';
     document.getElementById('goalWater').value = goals.water ?? '';
+    document.getElementById('goalBirthdate').value = goals.birthdate || '';
+  }
+
+  // Age in full years as of today, computed fresh from the stored birthdate each time
+  // (rather than a stored number) so it stays correct as time passes.
+  function calculateAge(birthdateStr) {
+    if (!birthdateStr) return null;
+    const today = todayStr();
+    const [by, bm, bd] = birthdateStr.split('-').map(Number);
+    const [ty, tm, td] = today.split('-').map(Number);
+    let age = ty - by;
+    if (tm < bm || (tm === bm && td < bd)) age--;
+    return age;
+  }
+
+  // General reference target, not personalized medical advice: AHA "Normal" (<120/80)
+  // for most adults, and the ACC/AHA-recognized relaxed goal (<130/80) for age 65+.
+  function healthyBpTarget(age) {
+    if (age === null || age === undefined) return null;
+    return age >= 65 ? { sys: 130, dia: 80 } : { sys: 120, dia: 80 };
+  }
+
+  // Standard AHA blood pressure categories, taking the more severe of systolic/diastolic.
+  function bpCategory(sys, dia) {
+    if (sys === null || sys === undefined || dia === null || dia === undefined) return null;
+    if (sys > 180 || dia > 120) return 'Hypertensive Crisis';
+    if (sys >= 140 || dia >= 90) return 'Stage 2 Hypertension';
+    if (sys >= 130 || dia >= 80) return 'Stage 1 Hypertension';
+    if (sys >= 120) return 'Elevated';
+    return 'Normal';
+  }
+
+  function bpCategoryDeltaClass(category) {
+    if (category === 'Normal') return 'pos';
+    if (category === 'Elevated' || category === 'Stage 1 Hypertension') return 'warn';
+    return 'neg';
   }
 
   function updateGoals(partial) {
@@ -590,8 +631,13 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
 
   function renderGoalDisplays() {
     document.getElementById('weightGoalValue').textContent = (goals.weight !== null && goals.weight !== undefined) ? goals.weight + ' lbs' : 'Not set';
-    document.getElementById('bpGoalValue').innerHTML = bpValueHtml(goals.systolic ?? null, goals.diastolic ?? null);
     document.getElementById('waterGoalValue').textContent = (goals.water !== null && goals.water !== undefined) ? goals.water + ' oz/day' : 'Not set';
+
+    const age = calculateAge(goals.birthdate);
+    const target = healthyBpTarget(age);
+    document.getElementById('bpGoalValue').innerHTML = target ? ('&lt;' + bpValueHtml(target.sys, target.dia)) : 'Set your birthday';
+    document.getElementById('ageValue').textContent = (age !== null) ? `Age ${age} · ${fmtDate(goals.birthdate)}` : '';
+    document.getElementById('bpAgeDivider').style.display = (age !== null) ? 'block' : 'none';
   }
 
   document.getElementById('saveTimeline').addEventListener('click', function () {
@@ -637,16 +683,15 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
   });
 
   document.getElementById('editGoalWeightBtn').addEventListener('click', function () { showGoalEdit('weight'); });
-  document.getElementById('editGoalBpBtn').addEventListener('click', function () { showGoalEdit('bp'); });
+  document.getElementById('editAgeBtn').addEventListener('click', function () { showGoalEdit('bp'); });
   document.getElementById('editGoalWaterBtn').addEventListener('click', function () { showGoalEdit('water'); });
 
   document.getElementById('cancelGoalWeightBtn').addEventListener('click', function () {
     document.getElementById('goalWeight').value = goals.weight ?? '';
     hideGoalEdit('weight');
   });
-  document.getElementById('cancelGoalBpBtn').addEventListener('click', function () {
-    document.getElementById('goalSystolic').value = goals.systolic ?? '';
-    document.getElementById('goalDiastolic').value = goals.diastolic ?? '';
+  document.getElementById('cancelAgeBtn').addEventListener('click', function () {
+    document.getElementById('goalBirthdate').value = goals.birthdate || '';
     hideGoalEdit('bp');
   });
   document.getElementById('cancelGoalWaterBtn').addEventListener('click', function () {
@@ -658,11 +703,8 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     updateGoals({ weight: parseFloatOrNull(document.getElementById('goalWeight').value) });
     hideGoalEdit('weight');
   });
-  document.getElementById('saveGoalBp').addEventListener('click', function () {
-    updateGoals({
-      systolic: parseFloatOrNull(document.getElementById('goalSystolic').value),
-      diastolic: parseFloatOrNull(document.getElementById('goalDiastolic').value),
-    });
+  document.getElementById('saveAgeBtn').addEventListener('click', function () {
+    updateGoals({ birthdate: document.getElementById('goalBirthdate').value || null });
     hideGoalEdit('bp');
   });
   document.getElementById('saveGoalWater').addEventListener('click', function () {
@@ -995,9 +1037,42 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
 
     const latestBpSys = latestEntryOnOrBefore('systolic', today) || firstEntryWithField('systolic');
     const latestBpDia = latestEntryOnOrBefore('diastolic', today) || firstEntryWithField('diastolic');
+    const bpTarget = healthyBpTarget(calculateAge(goals.birthdate));
     document.getElementById('bpStat').innerHTML = statBlock('Current Blood Pressure',
       bpValueHtml(latestBpSys ? latestBpSys.systolic : null, latestBpDia ? latestBpDia.diastolic : null),
-      bpDelta(latestBpSys, latestBpDia, goals.systolic, goals.diastolic));
+      bpDelta(latestBpSys, latestBpDia, bpTarget ? bpTarget.sys : null, bpTarget ? bpTarget.dia : null));
+  }
+
+  // Compares the last 5 logged readings to the age-based healthy target and notes
+  // which AHA hypertension category that average falls into.
+  function renderBpAnalysis() {
+    const wrap = document.getElementById('bpAnalysisStat');
+    const readings = entries
+      .filter(e => e.systolic !== null && e.systolic !== undefined && e.diastolic !== null && e.diastolic !== undefined)
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 5);
+
+    if (readings.length === 0) {
+      wrap.innerHTML = statBlock('5-Reading Average', '—', 'Log a blood pressure reading to see this');
+      return;
+    }
+
+    const avgSys = Math.round(readings.reduce((sum, r) => sum + r.systolic, 0) / readings.length);
+    const avgDia = Math.round(readings.reduce((sum, r) => sum + r.diastolic, 0) / readings.length);
+    const category = bpCategory(avgSys, avgDia);
+    const countNote = readings.length < 5 ? ` (${readings.length} logged)` : '';
+
+    let deltaHtml = `<span class="delta ${bpCategoryDeltaClass(category)}">${category}</span>`;
+    const target = healthyBpTarget(calculateAge(goals.birthdate));
+    if (target) {
+      const sysDiff = Math.max(avgSys - target.sys, 0);
+      const diaDiff = Math.max(avgDia - target.dia, 0);
+      if (sysDiff > 0 || diaDiff > 0) {
+        deltaHtml += ` <span>· ${sysDiff}/${diaDiff} above your target</span>`;
+      }
+    }
+
+    wrap.innerHTML = statBlock('5-Reading Average' + countNote, `${avgSys}/${avgDia}`, deltaHtml);
   }
 
   // Today's Water sits alongside Goal Achieved in the same stat row (where Days
@@ -1254,12 +1329,13 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
 
     const sysPts = entries.filter(e => e.systolic !== null && e.systolic !== undefined).map(e => ({ x: e.date, y: e.systolic }));
     const diaPts = entries.filter(e => e.diastolic !== null && e.diastolic !== undefined).map(e => ({ x: e.date, y: e.diastolic }));
+    const bpChartTarget = healthyBpTarget(calculateAge(goals.birthdate));
     drawLineChart('bpChart', [
       { points: sysPts, color: 'var(--sys-color)' },
       { points: diaPts, color: 'var(--dia-color)' }
     ], {
-      goalLine: { value: goals.systolic ?? null },
-      goalLine2: { value: goals.diastolic ?? null }
+      goalLine: { value: bpChartTarget ? bpChartTarget.sys : null },
+      goalLine2: { value: bpChartTarget ? bpChartTarget.dia : null }
     });
 
     const waterPts = entries.filter(e => e.water !== null && e.water !== undefined).map(e => ({ x: e.date, y: e.water }));
@@ -1482,6 +1558,7 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     renderTimeline();
     renderGoalDisplays();
     renderStats();
+    renderBpAnalysis();
     renderWaterProgress();
     renderTable();
     renderCharts();
