@@ -174,7 +174,14 @@
   .entry-row { display: flex; align-items: flex-end; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
   .entry-row.bp-entry-row { align-items: center; }
   .entry-field { flex: 0 1 130px; margin-bottom: 0; }
-  .bp-entry-fields { display: flex; flex-direction: column; gap: 10px; flex: 0 1 130px; }
+  .bp-entry-fields { display: flex; flex-direction: column; gap: 0; flex: 0 1 130px; }
+  /* .entry-field's flex-basis means width in the row layouts above, but this is a column
+     flex container, where flex-basis controls height instead — override back to natural
+     height so the two fields don't get stretched apart. */
+  .bp-entry-fields .entry-field { flex: 0 0 auto; width: 100%; }
+  .bp-entry-fields input { border-radius: 0; }
+  .bp-entry-fields .field:first-child input { border-radius: 6px 6px 0 0; }
+  .bp-entry-fields .field:last-child input { border-radius: 0 0 6px 6px; border-top: none; }
   .btn-metric { background: var(--metric-color); }
   .metric-card .stat { background: color-mix(in srgb, var(--metric-color) 6%, white); border-color: color-mix(in srgb, var(--metric-color) 22%, var(--border)); }
   .metric-card .stat .value { color: var(--metric-color); }
@@ -200,27 +207,11 @@
   .day-detail-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; border-bottom: 1px solid var(--border); }
   .day-detail-row:last-child { border-bottom: none; }
   .day-detail-empty { font-size: 13px; color: var(--muted); }
-  /* Blood pressure section: systolic red, diastolic blue, shown as a two-tone accent bar
-     and per-field coloring. A pseudo-element (rather than border-image) is used for the
-     gradient bar because border-image ignores border-radius and squares off the corners. */
-  .metric-bp {
-    border-left: none;
-    position: relative;
-    overflow: hidden;
-  }
-  .metric-bp::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 5px;
-    background: linear-gradient(180deg, var(--sys-color), var(--dia-color));
-    /* Rounded on its own corners too (not just relying on the card's overflow:hidden
-       clip), so the curve is consistent even on renderers that clip absolutely
-       positioned pseudo-elements slightly differently at the exact corner radius. */
-    border-radius: var(--radius) 0 0 var(--radius);
-  }
+  /* Blood pressure section: uses the same plain border-left as every other metric card
+     (colored red, matching the heading) so its rounded corners render identically to the
+     rest of the app — no custom pseudo-element/gradient technique that could render
+     differently across browsers. Systolic/diastolic are still distinguished via the
+     per-field label/value coloring below. */
   .metric-bp h2 { color: var(--sys-color); }
   .label-sys { color: var(--sys-color); }
   .label-dia { color: var(--dia-color); }
