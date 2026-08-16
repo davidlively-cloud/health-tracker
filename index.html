@@ -1315,12 +1315,20 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
 
     let svg = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`;
 
-    const gridLines = 4;
-    for (let i = 0; i <= gridLines; i++) {
-      const val = (maxY * i) / gridLines;
+    // Gridlines land on meaningful oz increments (8/16/32/64/128) instead of arbitrary
+    // fractions of the max, so a 1-gallon (128oz) line always lands exactly on one
+    // when it's in range — a clearer reference than an arbitrary computed number.
+    const gridStepCandidates = [8, 16, 32, 64, 128, 192, 256, 384, 512];
+    let gridStep = gridStepCandidates[gridStepCandidates.length - 1];
+    for (const step of gridStepCandidates) {
+      if (Math.ceil(maxY / step) <= 6) { gridStep = step; break; }
+    }
+    for (let val = 0; val <= maxY; val += gridStep) {
       const y = yPix(val);
-      svg += `<line x1="${padL}" y1="${y}" x2="${width - padR}" y2="${y}" stroke="#eef1f5" stroke-width="1"/>`;
-      svg += `<text x="${padL - 8}" y="${y + 4}" font-size="10" fill="#6b7684" text-anchor="end">${val.toFixed(0)}</text>`;
+      const isGallon = val === 128;
+      svg += `<line x1="${padL}" y1="${y}" x2="${width - padR}" y2="${y}" stroke="${isGallon ? '#9ca3af' : '#eef1f5'}" stroke-width="${isGallon ? 1.5 : 1}"${isGallon ? ' stroke-dasharray="4,3"' : ''}/>`;
+      const label = isGallon ? '1 gal' : val.toFixed(0);
+      svg += `<text x="${padL - 8}" y="${y + 4}" font-size="10" font-weight="${isGallon ? '700' : '400'}" fill="${isGallon ? '#4b5563' : '#6b7684'}" text-anchor="end">${label}</text>`;
     }
 
     if (goalValue !== null && goalValue !== undefined) {
