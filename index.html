@@ -1292,14 +1292,15 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     }
 
     const hadContent = container.dataset.rendered === '1';
-    const wasAtRightEdge = hadContent && (container.scrollLeft + container.clientWidth >= container.scrollWidth - 4);
+    const wasAtLeftEdge = hadContent && (container.scrollLeft <= 4);
     const prevScrollLeft = container.scrollLeft;
 
     const height = 220;
     const padL = 44, padR = 16, padT = 26, padB = 30;
     const plotH = height - padT - padB;
 
-    const sorted = points.slice().sort((a, b) => a.x.localeCompare(b.x));
+    // Most recent date first (leftmost bar), oldest trailing off to the right.
+    const sorted = points.slice().sort((a, b) => b.x.localeCompare(a.x));
     const slotWidth = 44;
     const barW = 28;
     const containerWidth = Math.max(280, container.clientWidth || 600);
@@ -1349,9 +1350,10 @@ const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
     container.innerHTML = svg;
     container.dataset.rendered = '1';
 
-    // Default to showing the most recent days; if the user had scrolled back through
-    // history, leave them where they were instead of yanking them back to today.
-    container.scrollLeft = (!hadContent || wasAtRightEdge) ? container.scrollWidth : prevScrollLeft;
+    // Default to showing the most recent days (now the left edge, since today is
+    // leftmost); if the user had scrolled right through history, leave them there
+    // instead of yanking them back.
+    container.scrollLeft = (!hadContent || wasAtLeftEdge) ? 0 : prevScrollLeft;
 
     if (clickable) {
       container.querySelectorAll('rect[data-date]').forEach(rect => {
